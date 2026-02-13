@@ -27,6 +27,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "clear",
 		Aliases:     []string{"c"},
+		Category:    "Chat",
 		Description: "Clear conversation",
 		Usage:       "/clear",
 		Handler: func(m *Model, args []string) {
@@ -40,6 +41,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "model",
 		Aliases:     []string{"m"},
+		Category:    "Config",
 		Description: "Show or set model variant",
 		Usage:       "/model [fast|think|opus|default]",
 		Handler: func(m *Model, args []string) {
@@ -64,6 +66,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "think",
 		Aliases:     []string{"t"},
+		Category:    "Chat",
 		Description: "Toggle thinking mode",
 		Usage:       "/think",
 		Handler: func(m *Model, args []string) {
@@ -81,6 +84,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "provider",
 		Aliases:     []string{"p"},
+		Category:    "Config",
 		Description: "Show or set default provider",
 		Usage:       "/provider [name]",
 		Handler: func(m *Model, args []string) {
@@ -101,16 +105,36 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "help",
 		Aliases:     []string{"h"},
-		Description: "Show available commands",
-		Usage:       "/help",
+		Category:    "General",
+		Description: "Show help or command details",
+		Usage:       "/help [command]",
 		Handler: func(m *Model, args []string) {
-			m.status = r.HelpString()
+			if len(args) == 0 {
+				m.state = viewHelp
+				return
+			}
+			name := strings.TrimPrefix(strings.ToLower(args[0]), "/")
+			cmd := r.Get(name)
+			if cmd == nil {
+				m.status = "Unknown command: /" + name + ". Try /help"
+				return
+			}
+			aliasStr := ""
+			if len(cmd.Aliases) > 0 {
+				aliases := make([]string, len(cmd.Aliases))
+				for i, a := range cmd.Aliases {
+					aliases[i] = "/" + a
+				}
+				aliasStr = " (aliases: " + strings.Join(aliases, ", ") + ")"
+			}
+			m.status = cmd.Usage + aliasStr + " - " + cmd.Description
 		},
 	})
 
 	r.Register(&Command{
 		Name:        "providers",
 		Aliases:     []string{"list"},
+		Category:    "Config",
 		Description: "List configured providers",
 		Usage:       "/providers",
 		Handler: func(m *Model, args []string) {
@@ -121,6 +145,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "add",
+		Category:    "Context",
 		Description: "Add file(s) to persistent context",
 		Usage:       "/add <file_or_dir>",
 		Handler: func(m *Model, args []string) {
@@ -130,6 +155,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "remove",
+		Category:    "Context",
 		Description: "Remove file from context",
 		Usage:       "/remove <file>",
 		Handler: func(m *Model, args []string) {
@@ -139,6 +165,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "context",
+		Category:    "Context",
 		Description: "List files in persistent context",
 		Usage:       "/context",
 		Handler: func(m *Model, args []string) {
@@ -148,6 +175,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "addprovider",
+		Category:    "Config",
 		Description: "Add a custom provider",
 		Usage:       "/addprovider <id> <url> <apikey> <model> [format] [color]",
 		Handler: func(m *Model, args []string) {
@@ -194,6 +222,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "delprovider",
 		Aliases:     []string{"del"},
+		Category:    "Config",
 		Description: "Delete a custom provider",
 		Usage:       "/delprovider <id>",
 		Handler: func(m *Model, args []string) {
@@ -211,6 +240,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "sidebar",
+		Category:    "Config",
 		Description: "Toggle sidebar visibility",
 		Usage:       "/sidebar",
 		Handler: func(m *Model, args []string) {
@@ -226,6 +256,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "compact",
+		Category:    "Chat",
 		Description: "Compact conversation context",
 		Usage:       "/compact",
 		Handler: func(m *Model, args []string) {
@@ -242,6 +273,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "theme",
+		Category:    "Config",
 		Description: "Switch color theme",
 		Usage:       "/theme [mocha|macchiato|frappe|latte]",
 		Handler: func(m *Model, args []string) {
@@ -266,6 +298,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "export",
+		Category:    "Session",
 		Description: "Export conversation to file",
 		Usage:       "/export [json|md]",
 		Handler: func(m *Model, args []string) {
@@ -291,6 +324,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "search",
 		Aliases:     []string{"s"},
+		Category:    "Session",
 		Description: "Search across sessions",
 		Usage:       "/search <query>",
 		Handler: func(m *Model, args []string) {
@@ -327,6 +361,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "notify",
+		Category:    "Config",
 		Description: "Toggle desktop notifications",
 		Usage:       "/notify",
 		Handler: func(m *Model, args []string) {
@@ -342,6 +377,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "sandbox",
+		Category:    "Tools",
 		Description: "Toggle sandbox mode",
 		Usage:       "/sandbox",
 		Handler: func(m *Model, args []string) {
@@ -361,6 +397,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "yolo",
+		Category:    "Tools",
 		Description: "Toggle YOLO mode (auto-approve tools)",
 		Usage:       "/yolo",
 		Handler: func(m *Model, args []string) {
@@ -377,6 +414,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "version",
 		Aliases:     []string{"v"},
+		Category:    "General",
 		Description: "Show version",
 		Usage:       "/version",
 		Handler: func(m *Model, args []string) {
@@ -386,6 +424,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "undo",
+		Category:    "Chat",
 		Description: "Undo last exchange",
 		Usage:       "/undo",
 		Handler: func(m *Model, args []string) {
@@ -396,6 +435,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "rewind",
 		Aliases:     []string{"rw"},
+		Category:    "Chat",
 		Description: "Remove last N messages",
 		Usage:       "/rewind [N]",
 		Handler: func(m *Model, args []string) {
@@ -405,6 +445,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "retry",
+		Category:    "Chat",
 		Description: "Retry last message",
 		Usage:       "/retry",
 		Handler: func(m *Model, args []string) {
@@ -414,6 +455,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "compare",
+		Category:    "Chat",
 		Description: "Compare providers side by side",
 		Usage:       "/compare [providers] <prompt>",
 		Handler: func(m *Model, args []string) {
@@ -423,6 +465,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "config",
+		Category:    "Config",
 		Description: "Show active configuration",
 		Usage:       "/config",
 		Handler: func(m *Model, args []string) {
@@ -432,6 +475,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "revert",
+		Category:    "Tools",
 		Description: "Revert file changes",
 		Usage:       "/revert [list|<file>]",
 		Handler: func(m *Model, args []string) {
@@ -441,6 +485,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "project",
+		Category:    "Context",
 		Description: "Show project info",
 		Usage:       "/project",
 		Handler: func(m *Model, args []string) {
@@ -465,6 +510,7 @@ func initCommands() *CommandRegistry {
 	r.Register(&Command{
 		Name:        "skill",
 		Aliases:     []string{"skills"},
+		Category:    "Tools",
 		Description: "List or execute skills",
 		Usage:       "/skill [name]",
 		Handler: func(m *Model, args []string) {
@@ -474,6 +520,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "stats",
+		Category:    "Session",
 		Description: "Show session statistics",
 		Usage:       "/stats",
 		Handler: func(m *Model, args []string) {
@@ -483,6 +530,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "memory",
+		Category:    "Session",
 		Description: "Show or clear MEMORY.md",
 		Usage:       "/memory [show|clear]",
 		Handler: func(m *Model, args []string) {
@@ -492,6 +540,7 @@ func initCommands() *CommandRegistry {
 
 	r.Register(&Command{
 		Name:        "mcp",
+		Category:    "Tools",
 		Description: "List MCP servers and tools",
 		Usage:       "/mcp",
 		Handler: func(m *Model, args []string) {

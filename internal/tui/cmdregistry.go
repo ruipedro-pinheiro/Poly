@@ -10,6 +10,7 @@ import (
 type Command struct {
 	Name        string   // primary name without slash (e.g., "clear")
 	Aliases     []string // short aliases (e.g., ["c"])
+	Category    string   // grouping for help display (e.g., "Chat", "Session")
 	Description string   // short description for help/completion
 	Usage       string   // e.g., "/clear" or "/theme <name>"
 	Handler     func(m *Model, args []string)
@@ -106,4 +107,24 @@ func (r *CommandRegistry) HelpDetailed() string {
 		b.WriteString(fmt.Sprintf("  %-30s %s\n", usage, cmd.Description))
 	}
 	return b.String()
+}
+
+// ByCategory returns commands grouped by category, preserving registration order.
+// Returns category names in order of first appearance and a map of category -> commands.
+func (r *CommandRegistry) ByCategory() ([]string, map[string][]*Command) {
+	groups := make(map[string][]*Command)
+	var order []string
+	seen := make(map[string]bool)
+	for _, cmd := range r.ordered {
+		cat := cmd.Category
+		if cat == "" {
+			cat = "Other"
+		}
+		if !seen[cat] {
+			seen[cat] = true
+			order = append(order, cat)
+		}
+		groups[cat] = append(groups[cat], cmd)
+	}
+	return order, groups
 }

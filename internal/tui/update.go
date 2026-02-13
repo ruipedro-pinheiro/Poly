@@ -161,6 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
 		cmds = append(cmds, cmd)
+		m.syncTextareaHeight()
 
 		m.viewport, cmd = m.viewport.Update(msg)
 		cmds = append(cmds, cmd)

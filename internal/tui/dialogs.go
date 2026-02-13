@@ -69,7 +69,10 @@ func (m Model) renderSplash() string {
 }
 
 func (m Model) renderHelp() string {
-	header := core.Title("Help", 44, styles.Mauve, styles.Surface2)
+	w := dialogWidth(62, m.width, 44)
+	innerW := w - 6 // padding + border
+
+	header := core.Title("Help", innerW, styles.Mauve, styles.Surface2)
 
 	sectionStyle := lipgloss.NewStyle().
 		Foreground(theme.Mauve).
@@ -82,70 +85,77 @@ func (m Model) renderHelp() string {
 	descStyle := lipgloss.NewStyle().
 		Foreground(theme.Subtext1)
 
+	cmdStyle := lipgloss.NewStyle().
+		Foreground(theme.Lavender).
+		Bold(true)
+
+	aliasStyle := lipgloss.NewStyle().
+		Foreground(theme.Overlay1)
+
 	dimStyle := lipgloss.NewStyle().
 		Foreground(theme.Overlay0)
 
 	var content strings.Builder
 	content.WriteString(header + "\n\n")
 
-	// Navigation section
-	content.WriteString(sectionStyle.Render("  NAVIGATION") + "\n")
-	navKeys := []struct{ key, desc string }{
+	// Keybindings section
+	content.WriteString(sectionStyle.Render("  KEYBINDINGS") + "\n")
+	keybindings := []struct{ key, desc string }{
+		{"Ctrl+H", "This help"},
 		{"Ctrl+D", "Control Room"},
 		{"Ctrl+O", "Model Picker"},
 		{"Ctrl+K", "Command Palette"},
-		{"Ctrl+H", "This help"},
-	}
-	for _, k := range navKeys {
-		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
-	}
-	content.WriteString("\n")
-
-	// Chat section
-	content.WriteString(sectionStyle.Render("  CHAT") + "\n")
-	chatKeys := []struct{ key, desc string }{
-		{"Enter", "Send message"},
-		{"Esc", "Cancel / Close"},
 		{"Ctrl+L", "Clear chat"},
 		{"Ctrl+N", "New session"},
 		{"Ctrl+T", "Toggle thinking"},
+		{"Enter", "Send message"},
+		{"Esc", "Cancel / Close"},
 	}
-	for _, k := range chatKeys {
-		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	for _, k := range keybindings {
+		content.WriteString("  " + keyStyle.Width(12).Render(k.key) + descStyle.Render(k.desc) + "\n")
 	}
 	content.WriteString("\n")
 
 	// Mentions section
-	content.WriteString(sectionStyle.Render("  MENTIONS") + "\n")
+	content.WriteString(sectionStyle.Render("  PROVIDERS") + "\n")
 	mentions := []struct{ key, desc string }{
-		{"@claude", "Claude"},
-		{"@gpt", "GPT"},
-		{"@gemini", "Gemini"},
-		{"@grok", "Grok"},
-		{"@all", "All providers"},
+		{"@claude", "Claude (Anthropic)"},
+		{"@gpt", "GPT (OpenAI)"},
+		{"@gemini", "Gemini (Google)"},
+		{"@grok", "Grok (xAI)"},
+		{"@all", "All providers (cascade)"},
 	}
 	for _, k := range mentions {
-		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+		content.WriteString("  " + keyStyle.Width(12).Render(k.key) + descStyle.Render(k.desc) + "\n")
 	}
 	content.WriteString("\n")
 
-	// Commands section
+	// Commands by category from registry
 	content.WriteString(sectionStyle.Render("  COMMANDS") + "\n")
-	commands := []struct{ key, desc string }{
-		{"/clear", "Clear chat"},
-		{"/model", "Change model"},
-		{"/think", "Toggle thinking"},
-		{"/sidebar", "Toggle sidebar"},
-		{"/export", "Export session (md/json)"},
-	}
-	for _, k := range commands {
-		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	content.WriteString(dimStyle.Render("  Use /help <cmd> for details") + "\n\n")
+
+	catOrder, catMap := m.commands.ByCategory()
+	for _, cat := range catOrder {
+		cmds := catMap[cat]
+		content.WriteString("  " + lipgloss.NewStyle().Foreground(theme.Mauve).Render(cat) + "\n")
+		for _, cmd := range cmds {
+			name := "/" + cmd.Name
+			alias := ""
+			if len(cmd.Aliases) > 0 {
+				parts := make([]string, len(cmd.Aliases))
+				for i, a := range cmd.Aliases {
+					parts[i] = "/" + a
+				}
+				alias = " " + aliasStyle.Render("("+strings.Join(parts, ", ")+")")
+			}
+			line := "    " + cmdStyle.Width(16).Render(name) + descStyle.Render(cmd.Description) + alias
+			content.WriteString(line + "\n")
+		}
 	}
 
 	content.WriteString("\n")
 	content.WriteString(dimStyle.Render("  Esc to close"))
 
-	w := dialogWidth(48, m.width, 38)
 	dialog := dialogStyle(w).Render(content.String())
 	return placeDialog(dialog, m.width, m.height)
 }

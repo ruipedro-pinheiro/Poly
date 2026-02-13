@@ -15,6 +15,7 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/updater"
+	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 	"github.com/pedromelo/poly/internal/tui/styles"
 	"github.com/pedromelo/poly/internal/tui/components/dialogs"
 	"github.com/pedromelo/poly/internal/tui/components/header"
@@ -170,7 +171,7 @@ func New() Model {
 		},
 	})
 	ta.SetHeight(1)
-	ta.KeyMap.InsertNewline.SetEnabled(false)
+	ta.KeyMap.InsertNewline.SetEnabled(true)
 
 	// Get providers from registry (auto-registered via init())
 	providers := llm.GetAllProviders()
@@ -257,6 +258,31 @@ func New() Model {
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(textarea.Blink, watchForApprovals(), checkForUpdate())
+}
+
+// syncTextareaHeight adjusts textarea height (1 to InputMaxLines) based on content,
+// then recalculates the layout so the viewport shrinks/grows accordingly.
+func (m *Model) syncTextareaHeight() {
+	lines := m.textarea.LineCount()
+	if lines < 1 {
+		lines = 1
+	}
+	if lines > tuiLayout.InputMaxLines {
+		lines = tuiLayout.InputMaxLines
+	}
+
+	// Only update if height actually changed
+	if m.textarea.Height() == lines {
+		return
+	}
+
+	m.textarea.SetHeight(lines)
+
+	// Recalculate layout with the new editor height
+	editorH := lines + tuiLayout.InputBoxChrome
+	m.layout = ComputeLayoutWithEditor(m.width, m.height, m.sidebarVisible, editorH)
+	m.viewport.SetHeight(m.layout.ViewportHeight)
+	m.updateViewport()
 }
 
 // checkForUpdate runs the update check in a goroutine and returns an UpdateAvailableMsg

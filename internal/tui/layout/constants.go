@@ -17,9 +17,14 @@ const (
 	// Vertical zones (heights in rows)
 	HeaderHeight    = 2
 	StatusHeight    = 2 // top border + status line
-	InputHeight     = 4 // editor box + hints line
+	InputHeight     = 4 // editor box + hints line (1-line textarea default)
 	EditorMinHeight = 3
 	EditorMaxHeight = 10
+
+	// Multi-line input
+	InputMaxLines       = 5 // max textarea lines before scrolling
+	InputBoxChrome      = 3 // border top + border bottom + hints line
+	InputMinHeight      = 4 // 1 line + chrome (matches InputHeight)
 
 	// Dialogs
 	DialogMaxWidth   = 80

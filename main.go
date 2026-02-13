@@ -21,8 +21,12 @@ import (
 	"golang.org/x/term"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	// Parse flags
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	shellMode := flag.Bool("shell", false, "Start in interactive shell mode")
 	interactiveMode := flag.Bool("i", false, "Start in interactive shell mode (alias)")
 	printMode := flag.String("print", "", "Non-interactive mode: send prompt and print response")
@@ -30,6 +34,11 @@ func main() {
 	jsonMode := flag.Bool("json", false, "Output streaming events as NDJSON")
 	sandboxMode := flag.Bool("sandbox", false, "Run bash commands in a container (podman/docker)")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("poly %s\n", version)
+		os.Exit(0)
+	}
 
 	// Load config from ~/.poly/config.json (merges with defaults)
 	config.Load()

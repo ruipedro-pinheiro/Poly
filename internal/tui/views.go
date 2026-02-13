@@ -143,7 +143,7 @@ func (m Model) renderInput() string {
 	if m.isStreaming {
 		hints = hintStyle.Render("esc stop streaming")
 	} else {
-		hints = hintStyle.Render("enter send · ctrl+k commands · @provider or @all")
+		hints = hintStyle.Render("enter send · shift+enter newline · ctrl+k commands · @provider or @all")
 	}
 
 	box := inputBoxStyle.Render(inputContent)

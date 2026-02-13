@@ -23,6 +23,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.state == viewChat {
 			m.textarea.InsertString(msg.Text)
+			m.syncTextareaHeight()
 			return m, nil
 		}
 		return m, nil
@@ -39,6 +40,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		text := getClipboardContent()
 		if text != "" {
 			m.textarea.InsertString(text)
+			m.syncTextareaHeight()
 		}
 		return m, nil
 	}
@@ -184,6 +186,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			m.textarea.SetValue(m.inputHistory[m.inputHistoryIdx])
 			m.textarea.CursorEnd()
+			m.syncTextareaHeight()
 			return m, nil
 		}
 		if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
@@ -210,6 +213,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					m.inputHistoryDraft = ""
 				}
 				m.textarea.CursorEnd()
+				m.syncTextareaHeight()
 				return m, nil
 			}
 		}
@@ -288,6 +292,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == viewChat {
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
+		m.syncTextareaHeight()
 		return m, cmd
 	}
 
@@ -384,6 +389,7 @@ func (m Model) handleSendKey() (tea.Model, tea.Cmd) {
 		}
 
 		m.textarea.Reset()
+		m.syncTextareaHeight()
 		m.updateViewport()
 
 		// Start streaming

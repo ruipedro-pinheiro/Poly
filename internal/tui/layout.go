@@ -30,12 +30,17 @@ type LayoutContext struct {
 
 // ComputeLayout calculates all dimensions from screen size and sidebar state.
 func ComputeLayout(screenW, screenH int, sidebarVisible bool) LayoutContext {
+	return ComputeLayoutWithEditor(screenW, screenH, sidebarVisible, layout.InputHeight)
+}
+
+// ComputeLayoutWithEditor calculates all dimensions with a dynamic editor height.
+func ComputeLayoutWithEditor(screenW, screenH int, sidebarVisible bool, editorH int) LayoutContext {
 	lc := LayoutContext{
 		ScreenWidth:  screenW,
 		ScreenHeight: screenH,
 		HeaderHeight: layout.HeaderHeight,
 		StatusHeight: layout.StatusHeight,
-		EditorHeight: layout.InputHeight,
+		EditorHeight: editorH,
 	}
 
 	// Sidebar width
