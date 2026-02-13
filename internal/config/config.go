@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/pedromelo/poly/internal/hooks"
@@ -175,34 +176,15 @@ func GetProviderColor(providerID string) string {
 	return "#888888" // fallback
 }
 
-// GetProviderNames returns all provider IDs in order
+// GetProviderNames returns all provider IDs sorted alphabetically.
+// No hardcoded order - custom providers appear alongside native ones.
 func GetProviderNames() []string {
 	cfg := Get()
-	// Preferred order
-	order := []string{"claude", "gpt", "gemini", "grok"}
 	result := make([]string, 0, len(cfg.Providers))
-
-	// Add in preferred order if they exist
-	for _, id := range order {
-		if _, ok := cfg.Providers[id]; ok {
-			result = append(result, id)
-		}
-	}
-
-	// Add any others not in preferred order
 	for id := range cfg.Providers {
-		found := false
-		for _, o := range order {
-			if o == id {
-				found = true
-				break
-			}
-		}
-		if !found {
-			result = append(result, id)
-		}
+		result = append(result, id)
 	}
-
+	sort.Strings(result)
 	return result
 }
 
