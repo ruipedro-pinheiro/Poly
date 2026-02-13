@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/pedromelo/poly/internal/auth"
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/tui/components/status"
@@ -318,6 +319,7 @@ func (m Model) handleSendKey() (tea.Model, tea.Cmd) {
 			}
 			m.inputHistoryIdx = -1
 			m.inputHistoryDraft = ""
+			config.AddHistory(content)
 
 			m.textarea.Reset()
 			m.handleCommand(content)
@@ -386,6 +388,7 @@ func (m Model) handleSendKey() (tea.Model, tea.Cmd) {
 			}
 			m.inputHistoryIdx = -1
 			m.inputHistoryDraft = ""
+			config.AddHistory(content)
 		}
 
 		m.textarea.Reset()

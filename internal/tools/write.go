@@ -46,16 +46,10 @@ func (t *WriteFileTool) Execute(args map[string]interface{}) ToolResult {
 		return ToolResult{Content: "Error: content is required", IsError: true}
 	}
 
-	cwd, _ := os.Getwd()
-	targetPath := filepath.Join(cwd, path)
-	absPath, err := filepath.Abs(targetPath)
+	// Path validation (resolves symlinks, blocks traversal)
+	absPath, err := ValidatePath(path)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
-	}
-
-	// Security check
-	if !strings.HasPrefix(absPath, cwd) {
-		return ToolResult{Content: "Error: access denied. Cannot write outside project root.", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
 	// Create parent directories if needed

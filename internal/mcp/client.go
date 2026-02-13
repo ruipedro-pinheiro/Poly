@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"sync"
+	"time"
 )
+
+const maxReconnectAttempts = 5
 
 // Client communicates with a single MCP server
 type Client struct {
@@ -16,11 +20,12 @@ type Client struct {
 	stdin  io.WriteCloser
 	stdout *bufio.Scanner
 
-	mu     sync.Mutex
-	nextID int
-	tools  []MCPTool
-	info   serverInfo
-	alive  bool
+	mu                sync.Mutex
+	nextID            int
+	tools             []MCPTool
+	info              serverInfo
+	alive             bool
+	reconnectAttempts int
 }
 
 // NewClient creates a new MCP client for a server config
@@ -99,7 +104,11 @@ func (c *Client) Connect() error {
 func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.closeLocked()
+}
 
+// closeLocked shuts down the MCP server (caller must hold c.mu)
+func (c *Client) closeLocked() {
 	c.alive = false
 	if c.stdin != nil {
 		c.stdin.Close()
@@ -108,6 +117,44 @@ func (c *Client) Close() {
 		c.cmd.Process.Kill()
 		c.cmd.Wait()
 	}
+	c.stdin = nil
+	c.stdout = nil
+	c.cmd = nil
+}
+
+// Reconnect closes the current connection and attempts to re-establish it
+// with exponential backoff (1s, 2s, 4s, 8s, 16s). Returns nil on success.
+func (c *Client) Reconnect() error {
+	c.mu.Lock()
+	c.closeLocked()
+	c.mu.Unlock()
+
+	for attempt := 0; attempt < maxReconnectAttempts; attempt++ {
+		backoff := time.Second * time.Duration(1<<uint(attempt))
+		if backoff > 16*time.Second {
+			backoff = 16 * time.Second
+		}
+
+		log.Printf("[MCP] Reconnecting %s (attempt %d/%d, backoff %v)",
+			c.config.Name, attempt+1, maxReconnectAttempts, backoff)
+		time.Sleep(backoff)
+
+		if err := c.Connect(); err != nil {
+			log.Printf("[MCP] Reconnect %s failed: %v", c.config.Name, err)
+			continue
+		}
+
+		c.mu.Lock()
+		c.reconnectAttempts = 0
+		c.mu.Unlock()
+		log.Printf("[MCP] Reconnected %s successfully (%d tools)", c.config.Name, len(c.Tools()))
+		return nil
+	}
+
+	c.mu.Lock()
+	c.alive = false
+	c.mu.Unlock()
+	return fmt.Errorf("reconnect failed after %d attempts", maxReconnectAttempts)
 }
 
 // IsAlive returns true if the server is connected
@@ -134,8 +181,23 @@ func (c *Client) ServerName() string {
 	return c.config.Name
 }
 
-// CallTool executes a tool on this server
+// CallTool executes a tool on this server.
+// If the call fails due to a broken pipe, it attempts a single reconnect.
 func (c *Client) CallTool(name string, args map[string]interface{}) (string, error) {
+	result, err := c.callToolOnce(name, args)
+	if err != nil && !c.IsAlive() {
+		// Connection lost - attempt reconnect
+		log.Printf("[MCP] CallTool %s/%s failed, attempting reconnect: %v", c.config.Name, name, err)
+		if reconnErr := c.Reconnect(); reconnErr != nil {
+			return "", fmt.Errorf("call failed and reconnect failed: %w", reconnErr)
+		}
+		// Retry the call after successful reconnect
+		return c.callToolOnce(name, args)
+	}
+	return result, err
+}
+
+func (c *Client) callToolOnce(name string, args map[string]interface{}) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

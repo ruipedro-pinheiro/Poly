@@ -3,7 +3,6 @@ package tools
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -53,8 +52,6 @@ func (t *MultieditTool) Execute(args map[string]interface{}) ToolResult {
 		return ToolResult{Content: "Error: edits array is required and must not be empty", IsError: true}
 	}
 
-	cwd, _ := os.Getwd()
-
 	// Phase 1: Validate all edits before applying any
 	type editOp struct {
 		absPath   string
@@ -79,13 +76,10 @@ func (t *MultieditTool) Execute(args map[string]interface{}) ToolResult {
 			return ToolResult{Content: fmt.Sprintf("Error: edit[%d] missing path or old_string", i), IsError: true}
 		}
 
-		absPath, err := filepath.Abs(filepath.Join(cwd, path))
+		// Path validation (resolves symlinks, blocks traversal)
+		absPath, err := ValidatePath(path)
 		if err != nil {
-			return ToolResult{Content: fmt.Sprintf("Error: edit[%d] invalid path", i), IsError: true}
-		}
-
-		if !strings.HasPrefix(absPath, cwd) {
-			return ToolResult{Content: fmt.Sprintf("Error: edit[%d] path outside project root", i), IsError: true}
+			return ToolResult{Content: fmt.Sprintf("Error: edit[%d] %v", i, err), IsError: true}
 		}
 
 		data, err := os.ReadFile(absPath)

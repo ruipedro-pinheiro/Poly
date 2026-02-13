@@ -104,6 +104,28 @@ func (m *Manager) registerTools(serverName string, client *Client) {
 	}
 }
 
+// Reconnect attempts to reconnect a specific MCP server and re-register its tools
+func (m *Manager) Reconnect(serverName string) error {
+	m.mu.RLock()
+	client, ok := m.clients[serverName]
+	m.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("MCP server %q not found", serverName)
+	}
+
+	log.Printf("[MCP] Manager reconnecting %s...", serverName)
+	if err := client.Reconnect(); err != nil {
+		log.Printf("[MCP] Manager reconnect %s failed: %v", serverName, err)
+		return err
+	}
+
+	// Re-register tools after successful reconnect
+	m.registerTools(serverName, client)
+	log.Printf("[MCP] Manager reconnected %s (%d tools)", serverName, len(client.Tools()))
+	return nil
+}
+
 // Close shuts down all MCP servers
 func (m *Manager) Close() {
 	m.mu.Lock()

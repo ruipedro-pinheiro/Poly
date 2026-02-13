@@ -171,6 +171,7 @@ func New() Model {
 		},
 	})
 	ta.SetHeight(1)
+	ta.KeyMap.InsertNewline.SetKeys("shift+enter")
 	ta.KeyMap.InsertNewline.SetEnabled(true)
 
 	// Get providers from registry (auto-registered via init())
@@ -245,6 +246,7 @@ func New() Model {
 		thinkingExpanded:     make(map[int]bool),
 		paletteCommands:      buildCommandList(),
 		commands:             initCommands(),
+		inputHistory:         config.LoadHistory(),
 		inputHistoryIdx:      -1,
 		approvedTools:        make(map[string]bool),
 		sessionStartTime:     time.Now(),

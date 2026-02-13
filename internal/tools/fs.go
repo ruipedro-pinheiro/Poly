@@ -63,17 +63,10 @@ func (t *ReadFileTool) Execute(args map[string]interface{}) ToolResult {
 		return ToolResult{Content: "Error: path is required", IsError: true}
 	}
 
-	// Resolve path
-	cwd, _ := os.Getwd()
-	targetPath := filepath.Join(cwd, path)
-	absPath, err := filepath.Abs(targetPath)
+	// Path validation (resolves symlinks, blocks traversal)
+	absPath, err := ValidatePath(path)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
-	}
-
-	// Security check
-	if !strings.HasPrefix(absPath, cwd) {
-		return ToolResult{Content: "Error: access denied. Cannot read outside project root.", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
 	// Check if exists and is not a directory
@@ -199,16 +192,10 @@ func (t *ListFilesTool) Execute(args map[string]interface{}) ToolResult {
 		recursive = r
 	}
 
-	cwd, _ := os.Getwd()
-	targetPath := filepath.Join(cwd, path)
-	absPath, err := filepath.Abs(targetPath)
+	// Path validation (resolves symlinks, blocks traversal)
+	absPath, err := ValidatePath(path)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
-	}
-
-	// Security check
-	if !strings.HasPrefix(absPath, cwd) {
-		return ToolResult{Content: "Error: access denied. Cannot list outside project root.", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
 	var results []string

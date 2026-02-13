@@ -51,16 +51,10 @@ func (t *GlobTool) Execute(args map[string]interface{}) ToolResult {
 		basePath = p
 	}
 
-	cwd, _ := os.Getwd()
-	searchPath := filepath.Join(cwd, basePath)
-	absPath, err := filepath.Abs(searchPath)
+	// Path validation (resolves symlinks, blocks traversal)
+	absPath, err := ValidatePath(basePath)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
-	}
-
-	// Security check
-	if !strings.HasPrefix(absPath, cwd) {
-		return ToolResult{Content: "Error: access denied", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
 	var matches []string
@@ -196,18 +190,13 @@ func (t *GrepTool) Execute(args map[string]interface{}) ToolResult {
 		return ToolResult{Content: fmt.Sprintf("Error: invalid regex: %v", err), IsError: true}
 	}
 
-	cwd, _ := os.Getwd()
-	searchPath := filepath.Join(cwd, basePath)
-	absPath, err := filepath.Abs(searchPath)
+	// Path validation (resolves symlinks, blocks traversal)
+	absPath, err := ValidatePath(basePath)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
-	// Security check
-	if !strings.HasPrefix(absPath, cwd) {
-		return ToolResult{Content: "Error: access denied", IsError: true}
-	}
-
+	cwd, _ := os.Getwd()
 	var results []string
 	matchCount := 0
 
