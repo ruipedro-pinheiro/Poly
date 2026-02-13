@@ -75,7 +75,7 @@ func (m Model) renderChat() string {
 		statusBar,
 	)
 
-	if m.infoPanelCmp.IsVisible() {
+	if m.infoPanelCmp.IsVisible() && m.width >= 100 {
 		panel := m.infoPanelCmp.View()
 		result = overlayRight(result, panel, m.width)
 	}

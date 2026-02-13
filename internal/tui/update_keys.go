@@ -322,7 +322,32 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.isStreaming = false
 			m.streamTokenCount = 0
 			m.statusBar.Update(status.SetStreamingMsg{Active: false})
-			m.status = "Cancelled"
+
+			// Add cancel summary
+			if len(m.messages) > 0 {
+				lastIdx := len(m.messages) - 1
+				lastMsg := m.messages[lastIdx]
+				if lastMsg.Role == "assistant" {
+					// Count approximate tokens generated
+					tokenCount := (len(lastMsg.Content) + 3) / 4
+					toolCount := 0
+					for _, tc := range lastMsg.ToolCalls {
+						if tc.Status == 2 { // ToolStatusSuccess
+							toolCount++
+						}
+					}
+
+					summary := fmt.Sprintf("Cancelled after ~%d tokens", tokenCount)
+					if toolCount > 0 {
+						summary += fmt.Sprintf(", %d tool(s) completed", toolCount)
+					}
+					m.status = summary
+				} else {
+					m.status = "Cancelled"
+				}
+			} else {
+				m.status = "Cancelled"
+			}
 		}
 		// Close info panel if visible (before other dismiss logic)
 		if m.infoPanelCmp.IsVisible() && m.state == viewChat {

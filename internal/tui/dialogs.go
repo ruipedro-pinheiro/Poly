@@ -127,9 +127,13 @@ func (m Model) renderHelp() string {
 		{"Ctrl+D", "Control Room"},
 		{"Ctrl+O", "Model Picker"},
 		{"Ctrl+K", "Command Palette"},
+		{"Ctrl+I", "Info Panel"},
+		{"Ctrl+S", "Session List"},
 		{"Ctrl+L", "Clear chat"},
 		{"Ctrl+N", "New session"},
 		{"Ctrl+T", "Toggle thinking"},
+		{"Tab", "Focus viewport"},
+		{"Shift+Tab", "Focus input"},
 		{"Enter", "Send message"},
 		{"Esc", "Cancel / Close"},
 	}
@@ -140,16 +144,12 @@ func (m Model) renderHelp() string {
 
 	// Mentions section
 	content.WriteString(sectionStyle.Render("  PROVIDERS") + "\n")
-	mentions := []struct{ key, desc string }{
-		{"@claude", "Claude (Anthropic)"},
-		{"@gpt", "GPT (OpenAI)"},
-		{"@gemini", "Gemini (Google)"},
-		{"@grok", "Grok (xAI)"},
-		{"@all", "All providers (cascade)"},
+	// Dynamic provider mentions from config
+	names := config.GetProviderNames()
+	for _, name := range names {
+		content.WriteString("  " + keyStyle.Width(12).Render("@"+name) + descStyle.Render(name) + "\n")
 	}
-	for _, k := range mentions {
-		content.WriteString("  " + keyStyle.Width(12).Render(k.key) + descStyle.Render(k.desc) + "\n")
-	}
+	content.WriteString("  " + keyStyle.Width(12).Render("@all") + descStyle.Render("All providers (cascade)") + "\n")
 	content.WriteString("\n")
 
 	// Commands by category from registry
