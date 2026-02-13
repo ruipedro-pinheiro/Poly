@@ -84,6 +84,7 @@ type Model struct {
 	sessionCacheReadTokens     int
 	sessionCost                float64
 	sessionStartTime           time.Time
+	providerCosts              map[string]float64
 
 	// Response time tracking
 	streamStartTime  time.Time
@@ -258,6 +259,7 @@ func New() Model {
 		inputHistory:         config.LoadHistory(),
 		inputHistoryIdx:      -1,
 		approvedTools:        make(map[string]bool),
+		providerCosts:        make(map[string]float64),
 		sessionStartTime:     time.Now(),
 		headerBar:            header.New(),
 		statusBar:            status.New(),

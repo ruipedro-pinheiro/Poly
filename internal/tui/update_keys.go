@@ -298,6 +298,16 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case "k", "up":
 			m.viewport.ScrollUp(1)
 			return m, nil
+		case "t":
+			// Toggle thinking block expand/collapse for the last assistant message
+			if len(m.messages) > 0 {
+				lastIdx := len(m.messages) - 1
+				if m.messages[lastIdx].Thinking != "" {
+					m.thinkingExpanded[lastIdx] = !m.thinkingExpanded[lastIdx]
+					m.updateViewport()
+				}
+			}
+			return m, nil
 		case "enter":
 			m.focused = "input"
 			m.textarea.Focus()

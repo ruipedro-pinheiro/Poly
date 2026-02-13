@@ -189,10 +189,17 @@ func (m *Model) syncInfoPanel() {
 	providerStatuses := make([]infopanel.ProviderStatus, 0, len(m.controlRoomProviders))
 	for _, name := range m.controlRoomProviders {
 		_, connected := m.providers[name]
+		cost := m.providerCosts[name]
+		hasPricing := false
+		if p, ok := m.providers[name]; ok {
+			hasPricing = llm.HasPricing(p.GetModel())
+		}
 		providerStatuses = append(providerStatuses, infopanel.ProviderStatus{
-			Name:      name,
-			Connected: connected,
-			Color:     theme.ProviderColor(name),
+			Name:       name,
+			Connected:  connected,
+			Color:      theme.ProviderColor(name),
+			Cost:       cost,
+			HasPricing: hasPricing,
 		})
 	}
 	m.infoPanelCmp.SetProviders(providerStatuses)

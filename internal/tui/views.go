@@ -225,7 +225,9 @@ func (m Model) renderMessage(msg Message, index int) string {
 	case "system":
 		return m.renderSystemMessage(msg, availWidth)
 	default:
-		return m.renderAssistantMessage(msg, index, availWidth)
+		isExpanded := m.thinkingExpanded[index]
+		isStreamingLast := m.isStreaming && index == len(m.messages)-1
+		return m.renderAssistantMessage(msg, index, availWidth, isExpanded, isStreamingLast)
 	}
 }
 
@@ -265,7 +267,7 @@ func (m Model) renderSystemMessage(msg Message, availWidth int) string {
 }
 
 // renderAssistantMessage renders an assistant message with provider-colored left bar
-func (m Model) renderAssistantMessage(msg Message, index int, availWidth int) string {
+func (m Model) renderAssistantMessage(msg Message, index int, availWidth int, isExpanded bool, isStreamingLast bool) string {
 	providerColor := theme.ProviderColor(msg.Provider)
 
 	// Header line: ◇ provider · time ─────────
@@ -290,41 +292,87 @@ func (m Model) renderAssistantMessage(msg Message, index int, availWidth int) st
 	var parts []string
 	parts = append(parts, header)
 
-	// Thinking block - simple background, NO nested border
+	// Thinking block - collapsed by default, expanded during streaming or on toggle
 	if msg.Thinking != "" {
-		thinkLabel := lipgloss.NewStyle().
-			Foreground(theme.Lavender).
-			Bold(true).
-			Render(core.IconLoading + " Thinking")
+		showExpanded := isExpanded || isStreamingLast
+		if showExpanded {
+			thinkLabel := lipgloss.NewStyle().
+				Foreground(theme.Lavender).
+				Bold(true).
+				Render("▼ Thinking")
 
-		thinkContent := lipgloss.NewStyle().
-			Foreground(theme.Overlay1).
-			Italic(true).
-			Width(innerWidth).
-			Render(msg.Thinking)
+			thinkContent := lipgloss.NewStyle().
+				Foreground(theme.Overlay1).
+				Italic(true).
+				Width(innerWidth).
+				Render(msg.Thinking)
 
-		// Simple background block, no border
-		thinkBlock := lipgloss.NewStyle().
-			Background(theme.Surface0).
-			Padding(0, 1).
-			Width(innerWidth).
-			Render(thinkLabel + "\n" + thinkContent)
+			thinkBlock := lipgloss.NewStyle().
+				Background(theme.Surface0).
+				Padding(0, 1).
+				Width(innerWidth).
+				Render(thinkLabel + "\n" + thinkContent)
 
-		parts = append(parts, thinkBlock)
+			parts = append(parts, thinkBlock)
+		} else {
+			collapsed := lipgloss.NewStyle().
+				Foreground(theme.Overlay1).
+				Render(core.IconActive + " Thinking...")
+			parts = append(parts, collapsed)
+		}
 	}
 
 	// Render body: inline interleaved blocks if available, else legacy
 	if len(msg.Blocks) > 0 {
-		for _, block := range msg.Blocks {
-			switch block.Type {
-			case "text":
-				if strings.TrimSpace(block.Text) != "" {
+		// Check if all tool calls are done so we can batch-summarize
+		allDone := true
+		hasErrors := false
+		var successNames []string
+		for _, tc := range msg.ToolCalls {
+			status := toolCallStatus(tc.Status)
+			if status == tools.ToolStatusRunning || status == tools.ToolStatusPending {
+				allDone = false
+				break
+			}
+			if status == tools.ToolStatusError {
+				hasErrors = true
+			} else {
+				successNames = append(successNames, tc.Name)
+			}
+		}
+
+		if allDone && len(msg.ToolCalls) > 1 {
+			// All tools finished: render text blocks normally, replace tool blocks with batch summary
+			for _, block := range msg.Blocks {
+				if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
 					parts = append(parts, renderMarkdown(block.Text, innerWidth))
 				}
-			case "tool":
-				if block.ToolIdx < len(msg.ToolCalls) {
-					tc := msg.ToolCalls[block.ToolIdx]
-					parts = append(parts, renderInlineToolCall(tc, innerWidth))
+			}
+			// Batch summary for successes
+			if len(successNames) > 0 {
+				parts = append(parts, tools.RenderBatchSummary(successNames))
+			}
+			// Show errors individually
+			if hasErrors {
+				for _, tc := range msg.ToolCalls {
+					if toolCallStatus(tc.Status) == tools.ToolStatusError {
+						parts = append(parts, renderInlineToolCall(tc, innerWidth))
+					}
+				}
+			}
+		} else {
+			// Still running or single tool: render blocks individually
+			for _, block := range msg.Blocks {
+				switch block.Type {
+				case "text":
+					if strings.TrimSpace(block.Text) != "" {
+						parts = append(parts, renderMarkdown(block.Text, innerWidth))
+					}
+				case "tool":
+					if block.ToolIdx < len(msg.ToolCalls) {
+						tc := msg.ToolCalls[block.ToolIdx]
+						parts = append(parts, renderInlineToolCall(tc, innerWidth))
+					}
 				}
 			}
 		}

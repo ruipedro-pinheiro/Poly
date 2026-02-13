@@ -40,6 +40,9 @@ func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
 			m.updateViewport()
 			return m, nil
 		} else if msg.Done {
+			// Collapse thinking block now that streaming is done
+			m.thinkingExpanded[lastIdx] = false
+
 			// Track tokens
 			m.updateTokenStats(msg)
 
@@ -256,6 +259,12 @@ func (m *Model) updateTokenStats(msg StreamMsg) {
 	}
 	// Calculate cost (with cache discount for Anthropic)
 	m.sessionCost = calculateCostWithCache(m.sessionInputTokens, m.sessionOutputTokens, m.sessionCacheCreationTokens, m.sessionCacheReadTokens, m.defaultProvider)
+
+	// Per-provider cost
+	if msg.Provider != "" {
+		provCost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider)
+		m.providerCosts[msg.Provider] += provCost
+	}
 }
 
 // handleCompactMsg starts the compaction process in a goroutine

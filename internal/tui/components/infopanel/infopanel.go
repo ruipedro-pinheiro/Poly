@@ -27,9 +27,11 @@ type ModifiedFile struct {
 
 // ProviderStatus represents a provider's connection state.
 type ProviderStatus struct {
-	Name      string
-	Connected bool
-	Color     color.Color
+	Name       string
+	Connected  bool
+	Color      color.Color
+	Cost       float64
+	HasPricing bool
 }
 
 // MCPServer represents an MCP server's connection state.
@@ -282,7 +284,17 @@ func (p *infoPanelCmp) renderProviders(sb *strings.Builder, width int) {
 			name = name[:maxName-2] + ".."
 		}
 
-		sb.WriteString("  " + icon + " " + nameStyle.Render(name) + "\n")
+		// Cost display
+		costInfo := ""
+		if prov.Cost > 0 {
+			costStyle := lipgloss.NewStyle().Foreground(styles.Subtext0)
+			costInfo = " " + costStyle.Render(fmt.Sprintf("$%.2f", prov.Cost))
+		} else if !prov.HasPricing {
+			naStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
+			costInfo = " " + naStyle.Render("N/A")
+		}
+
+		sb.WriteString("  " + icon + " " + nameStyle.Render(name) + costInfo + "\n")
 	}
 }
 

@@ -51,6 +51,32 @@ func CalculateCostWithCache(inputTokens, outputTokens, cacheCreationTokens, cach
 	return inputCost + outputCost + cacheWriteCost + cacheReadCost
 }
 
+// HasPricing returns true if the model has known pricing in the table
+func HasPricing(model string) bool {
+	if _, ok := pricingTable[model]; ok {
+		return true
+	}
+	for prefix := range pricingTable {
+		if len(model) >= len(prefix) && model[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// EstimateCascadeCost estimates the cost of sending approxTokens to multiple models
+func EstimateCascadeCost(approxInputTokens int, models []string) float64 {
+	var total float64
+	estimatedOutput := approxInputTokens / 2
+	if estimatedOutput < 500 {
+		estimatedOutput = 500
+	}
+	for _, model := range models {
+		total += CalculateCost(approxInputTokens, estimatedOutput, model)
+	}
+	return total
+}
+
 // lookupPricing finds pricing by matching model name prefix
 func lookupPricing(model string) ModelPricing {
 	// Try exact match first

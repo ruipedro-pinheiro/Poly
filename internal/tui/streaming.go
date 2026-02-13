@@ -201,8 +201,31 @@ func (m *Model) sendCascade(content string) tea.Cmd {
 	responder := configuredProviders[0]
 	reviewers := configuredProviders[1:]
 
+	// Estimate cascade cost
+	approxTokens := 0
+	for _, msg := range m.messages {
+		approxTokens += (len(msg.Content) + 3) / 4
+	}
+
+	models := make([]string, 0, len(configuredProviders))
+	for _, name := range configuredProviders {
+		if p, ok := m.providers[name]; ok {
+			models = append(models, p.GetModel())
+		}
+	}
+
+	estimatedCost := llm.EstimateCascadeCost(approxTokens, models)
+
 	// Remove the empty assistant placeholder
 	m.messages = m.messages[:len(m.messages)-1]
+
+	// Add cost estimate as system message
+	if estimatedCost > 0 {
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Cascade to %d providers — estimated ~$%.2f", len(configuredProviders), estimatedCost),
+		})
+	}
 
 	// Capture original user images for reviewers
 	var userImages []llm.Image
