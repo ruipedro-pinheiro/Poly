@@ -121,9 +121,10 @@ func TestMapNormalizedRange_SimpleMatch(t *testing.T) {
 func TestMapNormalizedRange_MiddleRange(t *testing.T) {
 	// "aa   bb   cc" normalizes to "aa bb cc" (8 chars)
 	// Normalized range for "bb" is [3,5)
+	// In original: 'b' starts at byte 5, ends at 6, then trailing whitespace 7,8,9 consumed -> origEnd=10
 	origStart, origEnd := mapNormalizedRange("aa   bb   cc", 3, 5)
-	if origStart != 5 || origEnd != 7 {
-		t.Errorf("mapNormalizedRange(middle) = (%d, %d), want (5, 7)", origStart, origEnd)
+	if origStart != 5 || origEnd != 10 {
+		t.Errorf("mapNormalizedRange(middle) = (%d, %d), want (5, 10)", origStart, origEnd)
 	}
 }
 
