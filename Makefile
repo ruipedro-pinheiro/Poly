@@ -79,6 +79,13 @@ clean:
 setup-42:
 	bash scripts/setup-42.sh
 
+## sandbox-setup: Pull the sandbox container image
+sandbox-setup:
+	@RT=$$(command -v podman 2>/dev/null || command -v docker 2>/dev/null); \
+	if [ -z "$$RT" ]; then echo "Error: install podman or docker first"; exit 1; fi; \
+	echo "Pulling sandbox image (alpine:latest)..."; \
+	$$RT pull alpine:latest && echo "Sandbox ready."
+
 ## version: Print the current version
 version:
 	@echo $(VERSION)
@@ -94,4 +101,4 @@ help:
 # Phony declarations
 # ============================================================================
 
-.PHONY: build dev release install test test-verbose test-coverage lint fmt clean setup-42 version help
+.PHONY: build dev release install test test-verbose test-coverage lint fmt clean setup-42 sandbox-setup version help
