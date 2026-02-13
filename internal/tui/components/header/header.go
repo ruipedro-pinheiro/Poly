@@ -54,57 +54,18 @@ func (h *headerCmp) View() string {
 		return ""
 	}
 
-	// === Line 1: Logo left, cwd right ===
-	prefix := core.GradientText(core.IconModel+" POLY", styles.Mauve, styles.Lavender, true)
-	prefixWidth := lipgloss.Width(core.IconModel + " POLY")
+	sep := lipgloss.NewStyle().Foreground(styles.Surface2).Render(" │ ")
 
-	// Right side: cwd in dim
-	var cwdRendered string
-	var cwdWidth int
-	if h.cwd != "" {
-		cwdStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
-		cwdRendered = cwdStyle.Render(h.cwd)
-		cwdWidth = lipgloss.Width(h.cwd)
-	}
+	// Logo
+	logo := core.GradientText(core.IconModel+" POLY", styles.Mauve, styles.Lavender, true)
 
-	// Gap between logo and cwd
-	gap1 := h.width - prefixWidth - cwdWidth - 4
-	if gap1 < 1 {
-		gap1 = 1
-	}
+	// Default provider: colored dot + name (no @ since multiple providers can be in the same chat)
+	provDot := lipgloss.NewStyle().Foreground(h.providerColor).Render("●")
+	provName := lipgloss.NewStyle().Foreground(h.providerColor).Bold(true).Render(h.provider)
+	provRendered := provDot + " " + provName
 
-	line1 := prefix + strings.Repeat(" ", gap1) + cwdRendered
-
-	// === Line 2: Separator with context % and hint right ===
-	rightInfo := h.buildContextHint()
-	rightWidth := lipgloss.Width(rightInfo)
-
-	sepLen := h.width - rightWidth - 4
-	if sepLen < 3 {
-		sepLen = 3
-	}
-
-	sepStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	separator := sepStyle.Render(strings.Repeat(core.IconSep, sepLen))
-
-	line2 := separator + " " + rightInfo
-
-	content := line1 + "\n" + line2
-
-	return lipgloss.NewStyle().
-		Width(h.width).
-		Padding(0, 1).
-		Render(content)
-}
-
-// buildContextHint constructs "32% · ctrl+d providers"
-func (h *headerCmp) buildContextHint() string {
-	sepStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	sep := sepStyle.Render(" · ")
-
+	// Context %
 	pctStr, pctVal := h.contextPercent()
-
-	// Color the percentage based on value
 	var pctColor color.Color
 	switch {
 	case pctVal >= 80:
@@ -114,11 +75,30 @@ func (h *headerCmp) buildContextHint() string {
 	default:
 		pctColor = styles.Green
 	}
-
 	pctRendered := lipgloss.NewStyle().Foreground(pctColor).Render(pctStr)
-	hintRendered := lipgloss.NewStyle().Foreground(styles.Overlay0).Render("ctrl+d providers")
 
-	return pctRendered + sep + hintRendered
+	// cwd on the right
+	cwdRendered := ""
+	cwdWidth := 0
+	if h.cwd != "" {
+		cwdRendered = lipgloss.NewStyle().Foreground(styles.Overlay0).Render(h.cwd)
+		cwdWidth = lipgloss.Width(h.cwd)
+	}
+
+	left := logo + sep + provRendered + sep + pctRendered
+	leftWidth := lipgloss.Width(core.IconModel+" POLY") + 3 + lipgloss.Width("● "+h.provider) + 3 + lipgloss.Width(pctStr)
+
+	gap := h.width - leftWidth - cwdWidth - 4
+	if gap < 1 {
+		gap = 1
+	}
+
+	line := left + strings.Repeat(" ", gap) + cwdRendered
+
+	return lipgloss.NewStyle().
+		Width(h.width).
+		Padding(0, 1).
+		Render(line)
 }
 
 // contextPercent returns a formatted string and the numeric value

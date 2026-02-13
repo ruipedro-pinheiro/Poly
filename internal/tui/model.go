@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"charm.land/bubbles/v2/textarea"
@@ -17,9 +18,7 @@ import (
 	"github.com/pedromelo/poly/internal/updater"
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 	"github.com/pedromelo/poly/internal/tui/styles"
-	"github.com/pedromelo/poly/internal/tui/components/dialogs"
 	"github.com/pedromelo/poly/internal/tui/components/header"
-	"github.com/pedromelo/poly/internal/tui/components/sidebar"
 	"github.com/pedromelo/poly/internal/tui/components/splash"
 	"github.com/pedromelo/poly/internal/tui/components/status"
 )
@@ -89,8 +88,6 @@ type Model struct {
 	streamStartTime  time.Time
 	streamTokenCount int
 
-	// Sidebar state
-	sidebarVisible  bool
 	modifiedFiles   []string
 
 	// Command palette state
@@ -138,13 +135,13 @@ type Model struct {
 	completion completionState
 
 	// Session list state (Phase 3)
-	sessionListIndex int
+	sessionListIndex     int
+	sessionListFilter    string // text filter for session names
+	sessionListFiltering bool   // true when filter input is active
 
 	// Components
 	headerBar  header.Header
-	sidebarCmp sidebar.Sidebar
 	statusBar  status.StatusCmp
-	dialogMgr  dialogs.DialogCmp
 	splashCmp  splash.Splash
 }
 
@@ -185,21 +182,28 @@ func New() Model {
 	modelVariants := llm.GetModelVariants()
 	for _, prov := range providerList {
 		if variants, ok := modelVariants[prov]; ok {
-			// Order variants consistently
-			variantOrder := []string{"default", "fast", "nano", "lite", "mini", "think", "opus", "pro", "sonnet4", "o3", "o3pro"}
-			for _, v := range variantOrder {
-				if modelName, ok := variants[v]; ok {
-					// Display name is provider + variant (or model name for default)
-					display := prov + " " + v
-					if v == "default" {
-						display = prov + " (" + modelName + ")"
-					}
-					modelList = append(modelList, modelOption{
-						provider: prov,
-						variant:  v,
-						display:  display,
-					})
+			// Build sorted variant keys, with "default" first
+			keys := make([]string, 0, len(variants))
+			for k := range variants {
+				if k != "default" {
+					keys = append(keys, k)
 				}
+			}
+			sort.Strings(keys)
+			if _, hasDefault := variants["default"]; hasDefault {
+				keys = append([]string{"default"}, keys...)
+			}
+			for _, v := range keys {
+				modelName := variants[v]
+				display := prov + " " + v
+				if v == "default" {
+					display = prov + " (" + modelName + ")"
+				}
+				modelList = append(modelList, modelOption{
+					provider: prov,
+					variant:  v,
+					display:  display,
+				})
 			}
 		}
 	}
@@ -240,7 +244,6 @@ func New() Model {
 		controlRoomProviders: providerList,
 		modelPickerModels:    modelList,
 		notificationsOn:      config.NotificationsEnabled(),
-		sidebarVisible:       true,
 		thinkingMode:         true,
 		modelVariant:         "think",
 		thinkingExpanded:     make(map[int]bool),
@@ -251,9 +254,7 @@ func New() Model {
 		approvedTools:        make(map[string]bool),
 		sessionStartTime:     time.Now(),
 		headerBar:            header.New(),
-		sidebarCmp:           sidebar.New(),
 		statusBar:            status.New(),
-		dialogMgr:            dialogs.New(),
 		splashCmp:            splash.New(),
 	}
 }
@@ -282,7 +283,7 @@ func (m *Model) syncTextareaHeight() {
 
 	// Recalculate layout with the new editor height
 	editorH := lines + tuiLayout.InputBoxChrome
-	m.layout = ComputeLayoutWithEditor(m.width, m.height, m.sidebarVisible, editorH)
+	m.layout = ComputeLayoutWithEditor(m.width, m.height, editorH)
 	m.viewport.SetHeight(m.layout.ViewportHeight)
 	m.updateViewport()
 }
@@ -324,10 +325,6 @@ func buildCommandList() []CommandEntry {
 		{Name: "Session List", Shortcut: "ctrl+s", Action: func(m *Model) {
 			m.state = viewSessionList
 			m.sessionListIndex = 0
-		}},
-		{Name: "Toggle Sidebar", Shortcut: "", Action: func(m *Model) {
-			m.sidebarVisible = !m.sidebarVisible
-			m.layout = ComputeLayout(m.width, m.height, m.sidebarVisible)
 		}},
 		{Name: "Control Room", Shortcut: "ctrl+d", Action: func(m *Model) {
 			m.state = viewControlRoom

@@ -12,6 +12,41 @@ import (
 	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
+// renderDialogFrame wraps content in a styled dialog box centered on screen.
+// It uses the dialog width from m.layout.DialogWidth, applies the theme border,
+// adds a title at the top, and handles vertical overflow with a scroll indicator.
+func (m Model) renderDialogFrame(title string, content string, preferredWidth int) string {
+	w := dialogWidth(preferredWidth, m.width, 40)
+	innerW := w - 6 // padding (2*2) + border (2*1)
+
+	// Build title header
+	header := core.Title(title, innerW, styles.Mauve, styles.Surface2)
+
+	// Combine header + content
+	body := header + "\n\n" + content
+
+	// Compute available height for dialog content (screen - 6 for border/padding/margins)
+	maxContentLines := m.height - 6
+	if maxContentLines < 5 {
+		maxContentLines = 5
+	}
+
+	// Truncate if content exceeds available height
+	lines := strings.Split(body, "\n")
+	if len(lines) > maxContentLines {
+		lines = lines[:maxContentLines-1]
+		scrollHint := lipgloss.NewStyle().
+			Foreground(theme.Overlay0).
+			Italic(true).
+			Render("  ... more below ...")
+		lines = append(lines, scrollHint)
+		body = strings.Join(lines, "\n")
+	}
+
+	dialog := dialogStyle(w).Render(body)
+	return placeDialog(dialog, m.width, m.height)
+}
+
 // dialogStyle returns the standard dialog container style
 func dialogStyle(width int) lipgloss.Style {
 	return lipgloss.NewStyle().
@@ -70,9 +105,7 @@ func (m Model) renderSplash() string {
 
 func (m Model) renderHelp() string {
 	w := dialogWidth(62, m.width, 44)
-	innerW := w - 6 // padding + border
-
-	header := core.Title("Help", innerW, styles.Mauve, styles.Surface2)
+	innerW := w - 6
 
 	sectionStyle := lipgloss.NewStyle().
 		Foreground(theme.Mauve).
@@ -96,7 +129,6 @@ func (m Model) renderHelp() string {
 		Foreground(theme.Overlay0)
 
 	var content strings.Builder
-	content.WriteString(header + "\n\n")
 
 	// Keybindings section
 	content.WriteString(sectionStyle.Render("  KEYBINDINGS") + "\n")
@@ -156,13 +188,11 @@ func (m Model) renderHelp() string {
 	content.WriteString("\n")
 	content.WriteString(dimStyle.Render("  Esc to close"))
 
-	dialog := dialogStyle(w).Render(content.String())
-	return placeDialog(dialog, m.width, m.height)
+	_ = innerW
+	return m.renderDialogFrame("Help", content.String(), 62)
 }
 
 func (m Model) renderControlRoom() string {
-	header := core.Title("Control Room", 40, styles.Mauve, styles.Surface2)
-
 	storage := auth.GetStorage()
 
 	type provInfo struct {
@@ -176,11 +206,10 @@ func (m Model) renderControlRoom() string {
 		"grok":   {">>", "API Key"},
 	}
 
-	var content strings.Builder
-	content.WriteString(header + "\n\n")
-
 	w := dialogWidth(52, m.width, 40)
-	innerWidth := w - 6 // padding + border
+	innerWidth := w - 6
+
+	var content strings.Builder
 
 	for i, providerName := range m.controlRoomProviders {
 		isSelected := i == m.controlRoomIndex
@@ -232,7 +261,7 @@ func (m Model) renderControlRoom() string {
 			row.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render("  *"))
 		}
 
-		// Row style: selected gets a subtle left accent, not a full background bar
+		// Row style: selected gets a subtle left accent
 		rowStr := row.String()
 		if isSelected {
 			rowStr = lipgloss.NewStyle().
@@ -312,25 +341,13 @@ func (m Model) renderControlRoom() string {
 		content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" close"))
 	}
 
-	dialog := dialogStyle(w).Render(content.String())
-	return placeDialog(dialog, m.width, m.height)
+	return m.renderDialogFrame("Control Room", content.String(), 52)
 }
 
 func (m Model) renderAddProvider() string {
-	header := lipgloss.NewStyle().
-		Foreground(theme.Mauve).
-		Bold(true).
-		Render("+ Add Provider")
+	w := dialogWidth(46, m.width, 36)
 
 	var content strings.Builder
-	content.WriteString(header + "\n")
-
-	w := dialogWidth(46, m.width, 36)
-	sepLen := w - 8
-	if sepLen < 10 {
-		sepLen = 10
-	}
-	content.WriteString(lipgloss.NewStyle().Foreground(theme.Surface2).Render(strings.Repeat("─", sepLen)) + "\n\n")
 
 	fields := []struct {
 		label       string
@@ -409,6 +426,5 @@ func (m Model) renderAddProvider() string {
 	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" save · "))
 	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
 
-	dialog := dialogStyle(w).Render(content.String())
-	return placeDialog(dialog, m.width, m.height)
+	return m.renderDialogFrame("+ Add Provider", content.String(), 46)
 }

@@ -52,13 +52,6 @@ type sidebarTodo struct {
 	ActiveForm string `json:"active_form"`
 }
 
-type mcpMessage struct {
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Content string `json:"content"`
-	Read    bool   `json:"read"`
-}
-
 type sidebarCmp struct {
 	width, height int
 
@@ -76,14 +69,6 @@ type sidebarCmp struct {
 	cacheMu      sync.Mutex
 	todosCache   []sidebarTodo
 	todosCacheAt time.Time
-	mcpCache     *mcpCacheEntry
-	mcpCacheAt   time.Time
-}
-
-type mcpCacheEntry struct {
-	unread  int
-	from    string
-	preview string
 }
 
 const cacheTTL = 5 * time.Second
@@ -511,45 +496,6 @@ func (s *sidebarCmp) getCachedTodos() []sidebarTodo {
 	return todos
 }
 
-func (s *sidebarCmp) getCachedMCP() *mcpCacheEntry {
-	s.cacheMu.Lock()
-	defer s.cacheMu.Unlock()
-
-	if time.Since(s.mcpCacheAt) < cacheTTL && s.mcpCache != nil {
-		return s.mcpCache
-	}
-
-	u, _ := user.Current()
-	if u == nil {
-		return nil
-	}
-	mcpPath := filepath.Join(u.HomeDir, ".local", "share", "mcp-servers", "ai-bridge", "data.json")
-	data, err := os.ReadFile(mcpPath)
-	if err != nil {
-		return nil
-	}
-
-	var mcpFile struct {
-		Messages []mcpMessage `json:"messages"`
-	}
-	json.Unmarshal(data, &mcpFile)
-
-	entry := &mcpCacheEntry{}
-	for _, msg := range mcpFile.Messages {
-		if msg.To == "poly" && !msg.Read {
-			entry.unread++
-			entry.from = msg.From
-			entry.preview = msg.Content
-			if len(entry.preview) > 27 {
-				entry.preview = entry.preview[:24] + "..."
-			}
-		}
-	}
-
-	s.mcpCache = entry
-	s.mcpCacheAt = time.Now()
-	return entry
-}
 
 // ---------------------------------------------------------------------------
 // Setters

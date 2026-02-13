@@ -42,12 +42,20 @@ var (
 	Blue      color.Color = lipgloss.Color("#89b4fa")
 	Lavender  color.Color = lipgloss.Color("#b4befe")
 
-	// Provider colors
-	ProviderClaude = lipgloss.Color("#fab387") // Peach/Orange
-	ProviderGPT    = lipgloss.Color("#a6e3a1") // Green
-	ProviderGemini = lipgloss.Color("#89b4fa") // Blue
-	ProviderGrok   = lipgloss.Color("#89dceb") // Sky
 )
+
+// providerPalette is a cyclic list of Catppuccin accent colors assigned to
+// providers in alphabetical order. When a provider has no config override,
+// it gets the color at its index (mod palette length).
+var providerPalette = []color.Color{
+	Mauve, Blue, Green, Peach, Pink, Teal, Yellow, Red,
+	Flamingo, Rosewater, Sky, Sapphire, Lavender,
+}
+
+// ProviderColorByIndex returns the palette color for a given index (cyclic).
+func ProviderColorByIndex(index int) color.Color {
+	return providerPalette[index%len(providerPalette)]
+}
 
 // Styles
 var (
@@ -221,11 +229,19 @@ func ProviderStyle(provider string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(ProviderColor(provider)).Bold(true)
 }
 
-// ProviderColor returns the color for a given provider (from config)
+// ProviderColor returns the color for a given provider.
+// Priority: config override > cyclic palette based on alphabetical position.
 func ProviderColor(provider string) color.Color {
 	c := config.GetProviderColor(provider)
 	if c != "" {
 		return lipgloss.Color(c)
+	}
+	// Find alphabetical index among all configured providers
+	names := config.GetProviderNames()
+	for i, name := range names {
+		if name == provider {
+			return ProviderColorByIndex(i)
+		}
 	}
 	return Overlay1
 }

@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 
@@ -221,36 +222,17 @@ func GetConfiguredProviders() []Provider {
 	return result
 }
 
-// GetProviderNames returns all registered provider names in display order
+// GetProviderNames returns all registered provider names sorted alphabetically.
+// No hardcoded order - custom providers appear alongside native ones.
 func GetProviderNames() []string {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 
-	// Define preferred order
-	order := []string{"claude", "gpt", "gemini", "grok"}
 	result := make([]string, 0, len(providerRegistry))
-
-	// Add in order if registered
-	for _, name := range order {
-		if _, ok := providerRegistry[name]; ok {
-			result = append(result, name)
-		}
-	}
-
-	// Add any new providers not in the predefined order
 	for name := range providerRegistry {
-		found := false
-		for _, n := range order {
-			if n == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			result = append(result, name)
-		}
+		result = append(result, name)
 	}
-
+	sort.Strings(result)
 	return result
 }
 

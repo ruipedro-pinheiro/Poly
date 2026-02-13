@@ -9,7 +9,6 @@
 //   - streaming.go  : sendToProvider(), sendCascade(), startReviewers(), stream event reading
 //   - commands.go   : handleCommand(), slash commands
 //   - clipboard.go  : getClipboardContent(), getClipboardImage()
-//   - sidebar.go    : Right info panel (model, tokens, cost, modified files)
 //   - palette.go    : Command palette overlay (Ctrl+K)
 //   - modelpicker.go: Enhanced model picker with filter and grouping
 //   - keys.go       : KeyMap and key bindings

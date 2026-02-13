@@ -3,20 +3,16 @@ package layout
 // Shared layout constants - single source of truth for all TUI dimensions.
 // Every component should reference these instead of using magic numbers.
 const (
-	// Context window size in tokens (Anthropic default)
+	// Context window size in tokens. Fallback value; should come from provider config.
 	DefaultContextWindow = 200_000
-
-	// Sidebar
-	SidebarWidth      = 28 // slightly wider for readability
-	SidebarMinScreenW = 80 // screen must be wider than this to show sidebar
 
 	// Terminal minimums
 	MinTermWidth  = 60
 	MinTermHeight = 15
 
 	// Vertical zones (heights in rows)
-	HeaderHeight    = 2
-	StatusHeight    = 2 // top border + status line
+	HeaderHeight    = 1
+	StatusHeight    = 1
 	InputHeight     = 4 // editor box + hints line (1-line textarea default)
 	EditorMinHeight = 3
 	EditorMaxHeight = 10

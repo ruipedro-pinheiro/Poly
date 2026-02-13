@@ -12,6 +12,8 @@ import (
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/tui/components/status"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // handleKeyMsg dispatches keyboard input to the appropriate view handler
@@ -257,14 +259,45 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleAuthInputKey(msg)
 	}
 
-	// Tab completion in chat mode
+	// Tab key in chat mode: completion or focus toggle
 	if m.state == viewChat && key.Matches(msg, m.keys.Tab) && !m.isStreaming {
-		return m.handleTabCompletion()
+		if m.focused == "input" {
+			// Try tab completion first
+			input := m.textarea.Value()
+			if m.completion.active || strings.HasPrefix(input, "/") || strings.Contains(input, "@") {
+				return m.handleTabCompletion()
+			}
+			// No completion context: switch focus to messages
+			m.focused = "messages"
+			m.textarea.Blur()
+			return m, nil
+		}
+		// In messages focus: switch back to input
+		m.focused = "input"
+		m.textarea.Focus()
+		return m, nil
 	}
 
 	// Reset completion state on any non-Tab key in chat mode
 	if m.state == viewChat && !key.Matches(msg, m.keys.Tab) {
 		m.completion.active = false
+	}
+
+	// Message viewport navigation when focused on messages
+	if m.state == viewChat && m.focused == "messages" {
+		keyStr := msg.String()
+		switch keyStr {
+		case "j", "down":
+			m.viewport.ScrollDown(1)
+			return m, nil
+		case "k", "up":
+			m.viewport.ScrollUp(1)
+			return m, nil
+		case "enter":
+			m.focused = "input"
+			m.textarea.Focus()
+			return m, nil
+		}
 	}
 
 	switch {
@@ -275,6 +308,11 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.streamTokenCount = 0
 			m.statusBar.Update(status.SetStreamingMsg{Active: false})
 			m.status = "Cancelled"
+		}
+		if m.focused == "messages" {
+			m.focused = "input"
+			m.textarea.Focus()
+			return m, nil
 		}
 		if m.oauthPending != "" || m.apiKeyPending != "" {
 			m.oauthPending = ""
@@ -290,7 +328,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Default: update textarea in chat mode
-	if m.state == viewChat {
+	if m.state == viewChat && m.focused == "input" {
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
 		m.syncTextareaHeight()
@@ -507,7 +545,7 @@ func (m Model) handleAddProviderKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			apiKey := m.addProviderValues[2]
 			cfg := llm.CustomProviderConfig{
 				ID:        m.addProviderValues[0],
-				Name:      strings.Title(m.addProviderValues[0]),
+				Name:      cases.Title(language.English).String(m.addProviderValues[0]),
 				BaseURL:   m.addProviderValues[1],
 				APIKey:    apiKey,
 				Model:     m.addProviderValues[3],

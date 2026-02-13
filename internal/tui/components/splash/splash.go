@@ -35,7 +35,7 @@ type splashCmp struct {
 // New creates a new splash screen component
 func New() Splash {
 	return &splashCmp{
-		version: "v0.2.0",
+		version: "dev",
 	}
 }
 

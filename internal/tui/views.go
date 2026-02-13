@@ -13,11 +13,6 @@ import (
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 )
 
-// sidebarWidth returns the sidebar width from the layout context.
-func (m Model) sidebarWidth() int {
-	return m.layout.SidebarWidth
-}
-
 // chatWidth returns the width available for the chat area from the layout context.
 func (m Model) chatWidth() int {
 	return m.layout.ChatWidth
@@ -61,43 +56,21 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) renderChat() string {
-	// Header
 	header := m.renderHeader()
 
-	sbWidth := m.sidebarWidth()
-	cWidth := m.chatWidth()
-
-	// Chat area
 	chatArea := lipgloss.NewStyle().
-		Width(cWidth).
+		Width(m.chatWidth()).
 		Height(m.viewport.Height()).
 		Padding(0, 1).
 		Render(m.viewport.View())
 
-	// Sidebar
-	var sidebarArea string
-	if sbWidth > 0 {
-		sidebarArea = m.renderSidebar(sbWidth, m.viewport.Height())
-	}
-
-	// Combine chat + sidebar horizontally
-	var mainArea string
-	if sbWidth > 0 {
-		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, chatArea, sidebarArea)
-	} else {
-		mainArea = chatArea
-	}
-
-	// Input area
 	inputArea := m.renderInput()
-
-	// Status bar
 	statusBar := m.renderStatusBar()
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
-		mainArea,
+		chatArea,
 		inputArea,
 		statusBar,
 	)
@@ -141,9 +114,11 @@ func (m Model) renderInput() string {
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 	var hints string
 	if m.isStreaming {
-		hints = hintStyle.Render("esc stop streaming")
+		hints = hintStyle.Render("esc stop")
+	} else if strings.TrimSpace(m.textarea.Value()) == "" {
+		hints = hintStyle.Render("enter send · @provider")
 	} else {
-		hints = hintStyle.Render("enter send · shift+enter newline · ctrl+k commands · @provider or @all")
+		hints = ""
 	}
 
 	box := inputBoxStyle.Render(inputContent)

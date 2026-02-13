@@ -9,8 +9,7 @@ type LayoutContext struct {
 	ScreenHeight int
 
 	// Horizontal zones
-	SidebarWidth int // 0 if hidden
-	ChatWidth    int // screen - sidebar
+	ChatWidth    int // full screen width
 	ContentWidth int // chat - borders - padding
 
 	// Vertical zones
@@ -28,13 +27,13 @@ type LayoutContext struct {
 	DialogHeight int
 }
 
-// ComputeLayout calculates all dimensions from screen size and sidebar state.
-func ComputeLayout(screenW, screenH int, sidebarVisible bool) LayoutContext {
-	return ComputeLayoutWithEditor(screenW, screenH, sidebarVisible, layout.InputHeight)
+// ComputeLayout calculates all dimensions from screen size.
+func ComputeLayout(screenW, screenH int) LayoutContext {
+	return ComputeLayoutWithEditor(screenW, screenH, layout.InputHeight)
 }
 
 // ComputeLayoutWithEditor calculates all dimensions with a dynamic editor height.
-func ComputeLayoutWithEditor(screenW, screenH int, sidebarVisible bool, editorH int) LayoutContext {
+func ComputeLayoutWithEditor(screenW, screenH int, editorH int) LayoutContext {
 	lc := LayoutContext{
 		ScreenWidth:  screenW,
 		ScreenHeight: screenH,
@@ -43,13 +42,8 @@ func ComputeLayoutWithEditor(screenW, screenH int, sidebarVisible bool, editorH 
 		EditorHeight: editorH,
 	}
 
-	// Sidebar width
-	if sidebarVisible && screenW > layout.SidebarMinScreenW {
-		lc.SidebarWidth = layout.SidebarWidth
-	}
-
-	// Chat width = everything minus sidebar
-	lc.ChatWidth = screenW - lc.SidebarWidth
+	// Chat width = full screen
+	lc.ChatWidth = screenW
 
 	// Content width = chat minus borders and padding
 	lc.ContentWidth = lc.ChatWidth - layout.ChatAreaPadding - layout.ContentPadding

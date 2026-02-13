@@ -11,19 +11,9 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-// renderSessionList renders the session list dialog
+// renderSessionList renders the session list dialog with scrolling and filter
 func (m Model) renderSessionList() string {
-	width := m.width - 8
-	if width > 70 {
-		width = 70
-	}
-	if width < 40 {
-		width = 40
-	}
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.Mauve).
-		Bold(true)
+	w := dialogWidth(70, m.width, 40)
 
 	selectedStyle := lipgloss.NewStyle().
 		Foreground(theme.Text).
@@ -43,15 +33,52 @@ func (m Model) renderSessionList() string {
 
 	var content strings.Builder
 
-	content.WriteString(titleStyle.Render("Sessions") + "\n\n")
+	// Filter input
+	if m.sessionListFilter != "" {
+		filterDisplay := m.sessionListFilter
+		filterBox := lipgloss.NewStyle().
+			Foreground(theme.Text).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(theme.Mauve).
+			Padding(0, 1).
+			Width(w - 12).
+			Render("/ " + filterDisplay)
+		content.WriteString(filterBox + "\n\n")
+	}
 
-	sessions := session.ListSessions()
+	sessions := m.filteredSessions()
 	currentID := session.CurrentID()
 
 	if len(sessions) == 0 {
-		content.WriteString(dimStyle.Render("  No sessions yet. Start chatting!"))
+		if m.sessionListFilter != "" {
+			content.WriteString(dimStyle.Render("  No sessions matching \"" + m.sessionListFilter + "\""))
+		} else {
+			content.WriteString(dimStyle.Render("  No sessions yet. Start chatting!"))
+		}
 	} else {
-		for i, s := range sessions {
+		// Compute visible range for scrolling
+		maxVisible := m.height - 12
+		if maxVisible < 3 {
+			maxVisible = 3
+		}
+
+		startIdx := 0
+		if m.sessionListIndex >= maxVisible {
+			startIdx = m.sessionListIndex - maxVisible + 1
+		}
+		endIdx := startIdx + maxVisible
+		if endIdx > len(sessions) {
+			endIdx = len(sessions)
+		}
+
+		// Scroll indicator top
+		if startIdx > 0 {
+			content.WriteString(dimStyle.Italic(true).Render(
+				fmt.Sprintf("  ... %d more above ...", startIdx)) + "\n")
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			s := sessions[i]
 			// Selection indicator
 			prefix := "  "
 			if i == m.sessionListIndex {
@@ -69,7 +96,7 @@ func (m Model) renderSessionList() string {
 			if title == "" {
 				title = "Untitled"
 			}
-			maxTitle := width - 30
+			maxTitle := w - 30
 			if maxTitle < 10 {
 				maxTitle = 10
 			}
@@ -96,6 +123,12 @@ func (m Model) renderSessionList() string {
 
 			content.WriteString(line + "\n")
 		}
+
+		// Scroll indicator bottom
+		if endIdx < len(sessions) {
+			content.WriteString(dimStyle.Italic(true).Render(
+				fmt.Sprintf("  ... %d more below ...", len(sessions)-endIdx)) + "\n")
+		}
 	}
 
 	content.WriteString("\n")
@@ -109,29 +142,61 @@ func (m Model) renderSessionList() string {
 			keyStyle.Render("n") + descStyle.Render(" new  ") +
 			keyStyle.Render("d") + descStyle.Render(" delete  ") +
 			keyStyle.Render("f") + descStyle.Render(" fork  ") +
+			keyStyle.Render("/") + descStyle.Render(" filter  ") +
 			keyStyle.Render("esc") + descStyle.Render(" close"),
 	)
 
-	// Wrap in dialog box
-	dialog := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
-		Padding(1, 2).
-		Width(width).
-		Render(content.String())
+	return m.renderDialogFrame("Sessions", content.String(), 70)
+}
 
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialog,
-	)
+// filteredSessions returns sessions matching the current filter
+func (m Model) filteredSessions() []session.SessionEntry {
+	sessions := session.ListSessions()
+	if m.sessionListFilter == "" {
+		return sessions
+	}
+
+	filter := strings.ToLower(m.sessionListFilter)
+	var result []session.SessionEntry
+	for _, s := range sessions {
+		title := strings.ToLower(s.Title)
+		provider := strings.ToLower(s.Provider)
+		if strings.Contains(title, filter) || strings.Contains(provider, filter) {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // handleSessionListKey handles key presses in the session list
 func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
-	sessions := session.ListSessions()
+	// If filtering, handle text input
+	if m.sessionListFiltering {
+		switch keyStr {
+		case "esc":
+			m.sessionListFiltering = false
+			m.sessionListFilter = ""
+			m.sessionListIndex = 0
+			return m, false
+		case "enter":
+			m.sessionListFiltering = false
+			return m, false
+		case "backspace":
+			if len(m.sessionListFilter) > 0 {
+				m.sessionListFilter = m.sessionListFilter[:len(m.sessionListFilter)-1]
+				m.sessionListIndex = 0
+			}
+			return m, false
+		default:
+			if len(keyStr) == 1 {
+				m.sessionListFilter += keyStr
+				m.sessionListIndex = 0
+			}
+			return m, false
+		}
+	}
+
+	sessions := m.filteredSessions()
 
 	switch keyStr {
 	case "up", "k":
@@ -146,6 +211,11 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 		}
 		return m, false
 
+	case "/":
+		m.sessionListFiltering = true
+		m.sessionListFilter = ""
+		return m, false
+
 	case "enter":
 		if m.sessionListIndex < len(sessions) {
 			s := sessions[m.sessionListIndex]
@@ -154,6 +224,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 			m.reloadSession()
 			m.state = viewChat
 			m.status = "Switched to: " + s.Title
+			m.sessionListFilter = ""
 		}
 		return m, true
 
@@ -163,6 +234,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 		m.reloadSession()
 		m.state = viewChat
 		m.status = "New session"
+		m.sessionListFilter = ""
 		return m, true
 
 	case "d", "D":
@@ -170,8 +242,9 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 			s := sessions[m.sessionListIndex]
 			if s.ID != session.CurrentID() {
 				session.DeleteSession(s.ID)
-				if m.sessionListIndex >= len(session.ListSessions()) {
-					m.sessionListIndex = len(session.ListSessions()) - 1
+				filtered := m.filteredSessions()
+				if m.sessionListIndex >= len(filtered) {
+					m.sessionListIndex = len(filtered) - 1
 				}
 				if m.sessionListIndex < 0 {
 					m.sessionListIndex = 0
@@ -189,6 +262,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 			m.reloadSession()
 			m.state = viewChat
 			m.status = "Forked session"
+			m.sessionListFilter = ""
 			return m, true
 		}
 		m.status = "Fork failed"
@@ -196,6 +270,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 
 	case "esc":
 		m.state = viewChat
+		m.sessionListFilter = ""
 		return m, true
 	}
 

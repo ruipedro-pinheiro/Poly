@@ -5,6 +5,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/pedromelo/poly/internal/theme"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // renderModelPicker renders the enhanced model picker grouped by provider
@@ -60,7 +62,7 @@ func (m Model) renderModelPicker() string {
 			providerHeaderStyle := lipgloss.NewStyle().
 				Foreground(theme.ProviderColor(model.provider)).
 				Bold(true)
-			content.WriteString("\n" + providerHeaderStyle.Render("  "+strings.Title(model.provider)) + "\n")
+			content.WriteString("\n" + providerHeaderStyle.Render("  "+cases.Title(language.English).String(model.provider)) + "\n")
 		}
 
 		isCurrent := m.defaultProvider == model.provider && m.modelVariant == model.variant

@@ -18,6 +18,8 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/tui/styles"
 	"github.com/pedromelo/poly/internal/updater"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // initCommands builds the command registry with all slash commands.
@@ -201,7 +203,7 @@ func initCommands() *CommandRegistry {
 			}
 			cfg := llm.CustomProviderConfig{
 				ID:        args[0],
-				Name:      strings.Title(args[0]),
+				Name:      cases.Title(language.English).String(args[0]),
 				BaseURL:   args[1],
 				APIKey:    apiKey,
 				Model:     args[3],
@@ -234,22 +236,6 @@ func initCommands() *CommandRegistry {
 				m.status = "Error: " + err.Error()
 			} else {
 				m.status = "Deleted @" + args[0]
-			}
-		},
-	})
-
-	r.Register(&Command{
-		Name:        "sidebar",
-		Category:    "Config",
-		Description: "Toggle sidebar visibility",
-		Usage:       "/sidebar",
-		Handler: func(m *Model, args []string) {
-			m.sidebarVisible = !m.sidebarVisible
-			m.layout = ComputeLayout(m.width, m.height, m.sidebarVisible)
-			if m.sidebarVisible {
-				m.status = "Sidebar visible"
-			} else {
-				m.status = "Sidebar hidden"
 			}
 		},
 	})

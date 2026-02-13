@@ -10,7 +10,6 @@ import (
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
-	"github.com/pedromelo/poly/internal/tui/components/dialogs"
 	"github.com/pedromelo/poly/internal/tui/components/status"
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 )
@@ -26,25 +25,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sm, cmd := m.statusBar.Update(msg)
 		m.statusBar = sm.(status.StatusCmp)
 		return m, cmd
-
-	// --- Dialog messages ---
-	case dialogs.OpenDialogMsg:
-		dm, cmd := m.dialogMgr.Update(msg)
-		m.dialogMgr = dm.(dialogs.DialogCmp)
-		return m, cmd
-
-	case dialogs.CloseDialogMsg:
-		dm, cmd := m.dialogMgr.Update(msg)
-		m.dialogMgr = dm.(dialogs.DialogCmp)
-		return m, cmd
-
-	case dialogs.CloseAllDialogsMsg:
-		dm, cmd := m.dialogMgr.Update(msg)
-		m.dialogMgr = dm.(dialogs.DialogCmp)
-		return m, cmd
-
-	case dialogs.DialogClosedMsg:
-		return m.handleDialogClosed(msg)
 
 	// --- Tool approval ---
 	case ToolPendingMsg:
@@ -123,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.layout = ComputeLayout(m.width, m.height, m.sidebarVisible)
+		m.layout = ComputeLayout(m.width, m.height)
 		initMarkdown(m.layout.ContentWidth)
 
 		if !m.ready {
@@ -149,7 +129,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.headerBar.SetCwd(cwd)
 		m.statusBar.SetWidth(m.width)
-		m.dialogMgr.SetSize(m.width, m.height)
 		m.updateViewport()
 		m.syncStatusBar()
 
@@ -168,14 +147,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
-}
-
-// handleDialogClosed processes results from dialog components
-func (m Model) handleDialogClosed(msg dialogs.DialogClosedMsg) (tea.Model, tea.Cmd) {
-	// Results from new dialog components will be handled here
-	// as dialogs are migrated from the old viewState system.
-	// For now, this is a no-op placeholder.
-	return m, nil
 }
 
 // syncStatusBar pushes the current Model state into the status bar component

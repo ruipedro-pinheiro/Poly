@@ -8,19 +8,14 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 )
 
-// renderCommandPalette renders the command palette overlay
+// renderCommandPalette renders the command palette overlay.
+// It dynamically lists ALL commands from the CommandRegistry, not just the
+// hardcoded paletteCommands list.
 func (m Model) renderCommandPalette() string {
-	titleStyle := lipgloss.NewStyle().
-		Foreground(theme.Mauve).
-		Bold(true)
-
-	title := titleStyle.Render("Commands")
-
 	w := dialogWidth(46, m.width, 36)
 	innerWidth := w - 6 // padding + border
 
 	var content strings.Builder
-	content.WriteString(title + "\n\n")
 
 	// Filter input (bordered style)
 	filterDisplay := m.paletteFilter
@@ -36,11 +31,33 @@ func (m Model) renderCommandPalette() string {
 		Render("> " + filterDisplay)
 	content.WriteString(filterBox + "\n\n")
 
-	// Filter commands
-	filtered := m.filteredPaletteCommands()
+	// Build command list from registry
+	filtered := m.filteredRegistryCommands()
+
+	// Compute visible range for scrolling
+	maxVisible := m.height - 14 // leave room for frame + filter + hints
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+
+	startIdx := 0
+	if m.paletteIndex >= maxVisible {
+		startIdx = m.paletteIndex - maxVisible + 1
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > len(filtered) {
+		endIdx = len(filtered)
+	}
+
+	// Scroll indicator top
+	if startIdx > 0 {
+		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
+			Render("   ... " + strings.Repeat("^", 3)) + "\n")
+	}
 
 	// Render commands
-	for i, cmd := range filtered {
+	for i := startIdx; i < endIdx; i++ {
+		cmd := filtered[i]
 		isSelected := i == m.paletteIndex
 
 		var row strings.Builder
@@ -54,12 +71,12 @@ func (m Model) renderCommandPalette() string {
 
 		// Command name
 		nameStyle := lipgloss.NewStyle().Foreground(theme.Text)
-		row.WriteString(nameStyle.Width(20).Render(cmd.Name))
+		row.WriteString(nameStyle.Width(20).Render("/" + cmd.Name))
 
-		// Shortcut (right side)
-		if cmd.Shortcut != "" {
-			shortcutStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-			row.WriteString(shortcutStyle.Render(cmd.Shortcut))
+		// Category (right side)
+		if cmd.Category != "" {
+			catStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+			row.WriteString(catStyle.Render(cmd.Category))
 		}
 
 		// Row style: selected gets left border accent
@@ -79,6 +96,12 @@ func (m Model) renderCommandPalette() string {
 		content.WriteString(rowStr + "\n")
 	}
 
+	// Scroll indicator bottom
+	if endIdx < len(filtered) {
+		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
+			Render("   ... " + strings.Repeat("v", 3)) + "\n")
+	}
+
 	content.WriteString("\n")
 	hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
 	hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
@@ -86,8 +109,7 @@ func (m Model) renderCommandPalette() string {
 	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" confirm · "))
 	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" close"))
 
-	dialog := dialogStyle(w).Render(content.String())
-	return placeDialog(dialog, m.width, m.height)
+	return m.renderDialogFrame("Commands", content.String(), 46)
 }
 
 // fuzzyMatch checks if query is a subsequence of target and returns a score.
@@ -118,21 +140,70 @@ func fuzzyMatch(query, target string) (bool, int) {
 	return qi == len(q), score
 }
 
-type scoredCommand struct {
-	cmd   CommandEntry
+// filteredPaletteCommands returns CommandEntry items matching the current filter.
+// This bridges the old palette system (used by handlePaletteKey in update_keys.go)
+// to the new registry-based command list.
+func (m Model) filteredPaletteCommands() []CommandEntry {
+	cmds := m.filteredRegistryCommands()
+	entries := make([]CommandEntry, len(cmds))
+	for i, cmd := range cmds {
+		c := cmd // capture
+		entries[i] = CommandEntry{
+			Name: "/" + c.Name,
+			Action: func(m *Model) {
+				c.Handler(m, nil)
+			},
+		}
+	}
+	return entries
+}
+
+type scoredRegistryCmd struct {
+	cmd   *Command
 	score int
 }
 
-// filteredPaletteCommands returns commands matching the current filter using fuzzy matching
-func (m Model) filteredPaletteCommands() []CommandEntry {
-	if m.paletteFilter == "" {
-		return m.paletteCommands
+// filteredRegistryCommands returns commands from the registry matching the
+// current filter using fuzzy matching. When no filter is active, returns all
+// commands from the registry in registration order.
+func (m Model) filteredRegistryCommands() []*Command {
+	if m.commands == nil {
+		return nil
 	}
 
-	var scored []scoredCommand
-	for _, cmd := range m.paletteCommands {
-		if ok, score := fuzzyMatch(m.paletteFilter, cmd.Name); ok {
-			scored = append(scored, scoredCommand{cmd: cmd, score: score})
+	// Get all commands in registration order
+	_, catMap := m.commands.ByCategory()
+	var allCmds []*Command
+	// Use ordered list from registry
+	catOrder, _ := m.commands.ByCategory()
+	for _, cat := range catOrder {
+		allCmds = append(allCmds, catMap[cat]...)
+	}
+
+	if m.paletteFilter == "" {
+		return allCmds
+	}
+
+	var scored []scoredRegistryCmd
+	for _, cmd := range allCmds {
+		// Match against name, description, and category
+		nameOk, nameScore := fuzzyMatch(m.paletteFilter, cmd.Name)
+		descOk, descScore := fuzzyMatch(m.paletteFilter, cmd.Description)
+		catOk, catScore := fuzzyMatch(m.paletteFilter, cmd.Category)
+
+		if nameOk || descOk || catOk {
+			bestScore := nameScore
+			if descScore > bestScore {
+				bestScore = descScore
+			}
+			if catScore > bestScore {
+				bestScore = catScore
+			}
+			// Name matches get a big bonus
+			if nameOk {
+				bestScore += 10
+			}
+			scored = append(scored, scoredRegistryCmd{cmd: cmd, score: bestScore})
 		}
 	}
 
@@ -140,7 +211,7 @@ func (m Model) filteredPaletteCommands() []CommandEntry {
 		return scored[i].score > scored[j].score
 	})
 
-	result := make([]CommandEntry, len(scored))
+	result := make([]*Command, len(scored))
 	for i, s := range scored {
 		result[i] = s.cmd
 	}
