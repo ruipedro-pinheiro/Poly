@@ -46,12 +46,18 @@ var toolClassification = map[string]Level{
 	// Delegation - ask permission (spawns API call)
 	"delegate_task": Ask,
 
+	// Diff tools - read-only listing and reject
+	"list_diffs":  Allow,
+	"reject_diff": Allow,
+
 	// Side-effect tools - ask permission
-	"bash":       Ask,
-	"write_file": Ask,
-	"edit_file":  Ask,
-	"multiedit":  Ask,
-	"web_fetch":  Ask,
+	"bash":         Ask,
+	"write_file":   Ask,
+	"edit_file":    Ask,
+	"multiedit":    Ask,
+	"propose_diff": Ask,
+	"apply_diff":   Ask,
+	"web_fetch":    Ask,
 	"web_search":   Ask,
 	"memory_write": Ask,
 }
@@ -82,7 +88,9 @@ var safeCommands = []string{
 	"ls", "cat", "head", "tail", "wc", "file", "which", "whereis", "whoami",
 	"pwd", "echo", "date", "uname", "hostname",
 	"git status", "git log", "git diff", "git branch", "git show",
-	"go version", "go env", "node --version", "python --version",
+	"git remote", "git stash list", "git tag",
+	"go version", "go env", "node --version", "npm --version",
+	"bun --version", "python --version",
 	"cargo --version", "rustc --version",
 }
 
@@ -93,6 +101,9 @@ var bannedCommands = []string{
 	"mkfs", "dd if=", ":(){:|:&};:",
 	"chmod -R 777 /", "chown -R",
 	"> /dev/sda", "mv / ",
+	"curl|bash", "curl |bash", "curl | bash", "curl|sh", "curl | sh",
+	"wget|bash", "wget |bash", "wget | bash", "wget|sh", "wget | sh",
+	"shutdown", "reboot", "halt",
 }
 
 // ClassifyBashCommand returns the permission level for a bash command

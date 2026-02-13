@@ -302,23 +302,48 @@ func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body map[st
 
 	url := "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":streamGenerateContent?alt=sse&key=" + apiKey
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
+	var resp *http.Response
+	var lastErr error
 
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	for attempt := 0; attempt <= MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(RetryDelay(attempt - 1)):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 5 * time.Minute}
+		resp, err = client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+
+		if !ShouldRetry(resp.StatusCode) {
+			return nil, lastErr
+		}
+	}
+
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, errors.New(string(bodyBytes))
-	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	result := &geminiStreamResult{}
@@ -570,25 +595,51 @@ func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body map[s
 	}
 
 	url := codeAssistEndpoint + ":streamGenerateContent?alt=sse"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, err
+
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt <= MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(RetryDelay(attempt - 1)):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		client := &http.Client{Timeout: 5 * time.Minute}
+		resp, err = client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		lastErr = fmt.Errorf("Code Assist error (%d): %s", resp.StatusCode, string(bodyBytes))
+
+		if !ShouldRetry(resp.StatusCode) {
+			return nil, lastErr
+		}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Code Assist error (%d): %s", resp.StatusCode, string(bodyBytes))
-	}
 
 	return p.parseCodeAssistStreamWithTools(resp.Body, eventChan)
 }

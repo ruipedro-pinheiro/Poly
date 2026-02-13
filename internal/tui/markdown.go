@@ -10,6 +10,7 @@ import (
 )
 
 var mdRenderer *glamour.TermRenderer
+var mdRendererWidth int
 
 // catppuccinGlamourStyle returns a glamour style config based on DarkStyleConfig
 // but with Catppuccin colors for headings, code blocks, and links.
@@ -69,6 +70,7 @@ func initMarkdown(width int) {
 	if width <= 0 {
 		width = 80
 	}
+	mdRendererWidth = width
 	mdRenderer, _ = glamour.NewTermRenderer(
 		glamour.WithStyles(catppuccinGlamourStyle()),
 		glamour.WithWordWrap(width),
@@ -77,8 +79,15 @@ func initMarkdown(width int) {
 
 // renderMarkdown renders markdown content to styled terminal output.
 // Falls back to plain text on error or if the renderer is not initialized.
+// If width differs from the configured renderer width, a new renderer is created.
 func renderMarkdown(content string, width int) string {
-	if mdRenderer == nil || width <= 0 {
+	if width <= 0 {
+		return content
+	}
+	if mdRenderer == nil || width != mdRendererWidth {
+		initMarkdown(width)
+	}
+	if mdRenderer == nil {
 		return content
 	}
 	rendered, err := mdRenderer.Render(content)

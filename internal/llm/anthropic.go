@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	maxRetries    = 3
-	retryDelay    = 2 * time.Second
 	mcpToolPrefix = "mcp_"
 )
 
@@ -371,38 +369,63 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body map[string]i
 		url += "?beta=true"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, err
-	}
+	var resp *http.Response
+	var lastErr error
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	if isOAuth {
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("anthropic-beta", "oauth-2025-04-20,interleaved-thinking-2025-05-14")
-		req.Header.Set("User-Agent", "claude-cli/2.1.2 (external, cli)")
-	} else {
-		req.Header.Set("x-api-key", token)
-		betaFeatures := "prompt-caching-2024-07-31"
-		if thinkingMode {
-			betaFeatures += ",interleaved-thinking-2025-05-14"
+	for attempt := 0; attempt <= MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(RetryDelay(attempt - 1)):
+			}
 		}
-		req.Header.Set("anthropic-beta", betaFeatures)
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("anthropic-version", "2023-06-01")
+
+		if isOAuth {
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("anthropic-beta", "oauth-2025-04-20,interleaved-thinking-2025-05-14")
+			req.Header.Set("User-Agent", "claude-cli/2.1.2 (external, cli)")
+		} else {
+			req.Header.Set("x-api-key", token)
+			betaFeatures := "prompt-caching-2024-07-31"
+			if thinkingMode {
+				betaFeatures += ",interleaved-thinking-2025-05-14"
+			}
+			req.Header.Set("anthropic-beta", betaFeatures)
+		}
+
+		client := &http.Client{Timeout: 5 * time.Minute}
+		resp, err = client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+
+		if !ShouldRetry(resp.StatusCode) {
+			return nil, lastErr
+		}
 	}
 
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, errors.New(string(bodyBytes))
-	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	result := &streamResult{}

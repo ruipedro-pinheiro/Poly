@@ -295,25 +295,52 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body map[string]interf
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.x.ai/v1/chat/completions", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, err
+	url := "https://api.x.ai/v1/chat/completions"
+
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt <= MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(RetryDelay(attempt - 1)):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+
+		client := &http.Client{Timeout: 5 * time.Minute}
+		resp, err = client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+
+		if !ShouldRetry(resp.StatusCode) {
+			return nil, lastErr
+		}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, errors.New(string(bodyBytes))
-	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	result := &grokStreamResult{}

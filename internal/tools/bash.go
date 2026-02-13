@@ -27,15 +27,8 @@ var blockedPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\breboot\b`),                        // reboot
 }
 
-// Safe commands that don't need permission
-var safeCommands = map[string]bool{
-	"git status": true, "git log": true, "git diff": true, "git branch": true,
-	"git remote": true, "git show": true, "git stash list": true, "git tag": true,
-	"ls": true, "pwd": true, "which": true, "whoami": true, "uname": true,
-	"cat": true, "head": true, "tail": true, "wc": true, "file": true,
-	"node --version": true, "bun --version": true, "npm --version": true,
-	"go version": true, "python --version": true,
-}
+// NOTE: Safe command classification is handled by permission.ClassifyBashCommand().
+// The blocked patterns below are a second layer of defense in BashTool.Execute().
 
 const (
 	maxOutput     = 30000
@@ -230,16 +223,3 @@ func truncateOutput(output string) string {
 		strings.Join(lines[tailStart:], "\n")
 }
 
-// IsSafeCommand checks if a command is in the safe list
-func IsSafeCommand(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if safeCommands[trimmed] {
-		return true
-	}
-	for safe := range safeCommands {
-		if strings.HasPrefix(trimmed, safe+" ") {
-			return true
-		}
-	}
-	return false
-}

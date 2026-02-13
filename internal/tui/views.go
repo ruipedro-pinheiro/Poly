@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"

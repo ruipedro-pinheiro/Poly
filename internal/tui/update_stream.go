@@ -279,6 +279,8 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	oldCount := len(m.messages)
+
 	// Convert LLM messages back to TUI messages
 	newMessages := make([]Message, 0, len(msg.Messages))
 	for _, lm := range msg.Messages {
@@ -296,19 +298,19 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 
 	m.messages = newMessages
 
-	// Re-persist the compacted session
-	session.Clear()
-	for _, msg := range m.messages {
-		session.AddMessage(session.Message{
+	// Re-persist the compacted session (use SetMessages to keep same session)
+	sessionMsgs := make([]session.Message, len(m.messages))
+	for i, msg := range m.messages {
+		sessionMsgs[i] = session.Message{
 			Role:     msg.Role,
 			Content:  msg.Content,
 			Provider: msg.Provider,
-		})
+		}
 	}
+	session.SetMessages(sessionMsgs)
 
-	oldCount := len(m.messages)
 	m.updateViewport()
-	m.status = fmt.Sprintf("Context compacted (%d messages)", oldCount)
+	m.status = fmt.Sprintf("Context compacted (%d -> %d messages)", oldCount, len(m.messages))
 	return m, nil
 }
 
