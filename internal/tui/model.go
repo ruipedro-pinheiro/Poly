@@ -226,7 +226,11 @@ func New() Model {
 		}
 	}
 
-	defaultProvider := "claude"
+	defaultProvider := ""
+	names := config.GetProviderNames()
+	if len(names) > 0 {
+		defaultProvider = names[0]
+	}
 	if sess != nil && sess.Provider != "" {
 		defaultProvider = sess.Provider
 	}

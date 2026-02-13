@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/pedromelo/poly/internal/auth"
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
 	splashPkg "github.com/pedromelo/poly/internal/tui/components/splash"
@@ -79,25 +79,15 @@ func placeDialog(content string, width, height int) string {
 
 func (m Model) renderSplash() string {
 	storage := auth.GetStorage()
-	providers := []struct {
-		name  string
-		color color.Color
-	}{
-		{"claude", theme.Peach},
-		{"gpt", theme.Green},
-		{"gemini", theme.Blue},
-		{"grok", theme.Sky},
-	}
-
+	names := config.GetProviderNames()
 	var statuses []splashPkg.ProviderStatus
-	for _, p := range providers {
+	for _, name := range names {
 		statuses = append(statuses, splashPkg.ProviderStatus{
-			Name:      p.name,
-			Connected: storage.IsConnected(p.name),
-			Color:     p.color,
+			Name:      name,
+			Connected: storage.IsConnected(name),
+			Color:     theme.ProviderColor(name),
 		})
 	}
-
 	m.splashCmp.SetProviders(statuses)
 	m.splashCmp.SetSize(m.width, m.height)
 	return m.splashCmp.View()
@@ -194,17 +184,7 @@ func (m Model) renderHelp() string {
 
 func (m Model) renderControlRoom() string {
 	storage := auth.GetStorage()
-
-	type provInfo struct {
-		icon     string
-		authType string
-	}
-	providerInfo := map[string]provInfo{
-		"claude": {">>", "API Key"},
-		"gpt":    {">>", "OAuth"},
-		"gemini": {">>", "OAuth"},
-		"grok":   {">>", "API Key"},
-	}
+	cfg := config.Get()
 
 	w := dialogWidth(52, m.width, 40)
 	innerWidth := w - 6
@@ -215,7 +195,19 @@ func (m Model) renderControlRoom() string {
 		isSelected := i == m.controlRoomIndex
 		isConnected := storage.IsConnected(providerName)
 		isDefault := m.defaultProvider == providerName
-		info := providerInfo[providerName]
+
+		// Get auth type label from config
+		authLabel := "Custom"
+		if p, ok := cfg.Providers[providerName]; ok {
+			switch p.AuthType {
+			case "oauth":
+				authLabel = "OAuth"
+			case "api_key":
+				authLabel = "API"
+			default:
+				authLabel = "Custom"
+			}
+		}
 
 		var row strings.Builder
 
@@ -227,32 +219,31 @@ func (m Model) renderControlRoom() string {
 		}
 
 		// Icon + Name
-		iconStyle := lipgloss.NewStyle().Foreground(theme.ProviderColor(providerName))
+		provColor := theme.ProviderColor(providerName)
+		iconStyle := lipgloss.NewStyle().Foreground(provColor)
 		nameStyle := lipgloss.NewStyle().
-			Foreground(theme.ProviderColor(providerName)).
+			Foreground(provColor).
 			Bold(true)
-		if info.icon != "" {
-			row.WriteString(iconStyle.Render(info.icon) + " ")
-		}
+		row.WriteString(iconStyle.Render(">>") + " ")
 		row.WriteString(nameStyle.Width(8).Render(providerName))
 
 		// Status badge
 		if isConnected {
-			authInfo := storage.GetAuth(providerName)
-			authLabel := "API"
-			if authInfo != nil && authInfo.Type == "oauth" {
-				authLabel = "OAuth"
+			connAuthInfo := storage.GetAuth(providerName)
+			connLabel := authLabel
+			if connAuthInfo != nil && connAuthInfo.Type == "oauth" {
+				connLabel = "OAuth"
 			}
 			badge := lipgloss.NewStyle().
 				Foreground(theme.Base).
 				Background(theme.Green).
 				Padding(0, 1).
-				Render(authLabel)
+				Render(connLabel)
 			row.WriteString(" " + badge)
 		} else {
 			badge := lipgloss.NewStyle().
 				Foreground(theme.Overlay0).
-				Render("- " + info.authType)
+				Render("- " + authLabel)
 			row.WriteString(" " + badge)
 		}
 

@@ -612,17 +612,11 @@ func (m Model) parseProvider(content string) string {
 	if strings.Contains(content, "@all") {
 		return "all"
 	}
-	if strings.Contains(content, "@claude") {
-		return "claude"
-	}
-	if strings.Contains(content, "@gpt") {
-		return "gpt"
-	}
-	if strings.Contains(content, "@gemini") {
-		return "gemini"
-	}
-	if strings.Contains(content, "@grok") {
-		return "grok"
+	// Check all configured providers dynamically
+	for _, name := range config.GetProviderNames() {
+		if strings.Contains(content, "@"+name) {
+			return name
+		}
 	}
 	return m.defaultProvider
 }

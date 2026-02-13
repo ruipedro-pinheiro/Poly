@@ -5,6 +5,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/pedromelo/poly/internal/config"
 )
 
 // maxFileSize is the maximum file size to include (50KB)
@@ -14,13 +16,17 @@ const maxFileSize = 50 * 1024
 // Must have at least one dot in the path to distinguish from @provider mentions
 var fileMentionRegex = regexp.MustCompile(`@([\w./\-]+\.\w+)`)
 
-// knownProviders lists provider names that should NOT be treated as file mentions
-var knownProviders = map[string]bool{
-	"claude": true,
-	"gpt":    true,
-	"gemini": true,
-	"grok":   true,
-	"all":    true,
+// isKnownProvider checks dynamically if a name is a configured provider
+func isKnownProvider(name string) bool {
+	if name == "all" {
+		return true
+	}
+	for _, p := range config.GetProviderNames() {
+		if p == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseFileMentions scans user input for @path patterns and reads the files.
@@ -39,7 +45,7 @@ func ParseFileMentions(input string) (enrichedContent string, files []string) {
 		path := match[1]
 
 		// Skip known provider names (e.g. @all.go would still match, but @claude won't)
-		if knownProviders[path] {
+		if isKnownProvider(path) {
 			continue
 		}
 

@@ -472,27 +472,27 @@ func startAnthropicCodeExchange(provider, code string) tea.Cmd {
 	}
 }
 
-// startOpenAIOAuth starts OpenAI OAuth flow in background
-func startOpenAIOAuth() tea.Cmd {
+// startOAuthForProvider starts the OAuth flow for any provider that supports it.
+// Claude uses a PKCE code-paste flow (handled separately via startAnthropicCodeExchange).
+func startOAuthForProvider(provider string) tea.Cmd {
 	return func() tea.Msg {
-		tokens, err := auth.StartOpenAIOAuthWithCallback()
-		if err != nil {
-			return OAuthResultMsg{Provider: "gpt", Success: false, Error: err.Error()}
-		}
-		auth.GetStorage().SetOAuthTokens("gpt", tokens)
-		return OAuthResultMsg{Provider: "gpt", Success: true}
-	}
-}
+		var tokens *auth.OAuthTokens
+		var err error
 
-// startGoogleOAuth starts Google OAuth flow in background
-func startGoogleOAuth() tea.Cmd {
-	return func() tea.Msg {
-		tokens, err := auth.StartGoogleOAuthWithCallback()
-		if err != nil {
-			return OAuthResultMsg{Provider: "gemini", Success: false, Error: err.Error()}
+		switch provider {
+		case "gpt":
+			tokens, err = auth.StartOpenAIOAuthWithCallback()
+		case "gemini":
+			tokens, err = auth.StartGoogleOAuthWithCallback()
+		default:
+			return OAuthResultMsg{Provider: provider, Success: false, Error: "OAuth not supported for " + provider}
 		}
-		auth.GetStorage().SetOAuthTokens("gemini", tokens)
-		return OAuthResultMsg{Provider: "gemini", Success: true}
+
+		if err != nil {
+			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
+		}
+		auth.GetStorage().SetOAuthTokens(provider, tokens)
+		return OAuthResultMsg{Provider: provider, Success: true}
 	}
 }
 

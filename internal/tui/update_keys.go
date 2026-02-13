@@ -496,31 +496,40 @@ func (m Model) handleControlRoomEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Start auth for selected provider
+	// Start auth for selected provider (config-driven)
 	provider := m.controlRoomProviders[m.controlRoomIndex]
 	if !auth.GetStorage().IsConnected(provider) {
-		switch provider {
-		case "claude":
-			_, err := auth.StartAnthropicOAuth("max")
-			if err != nil {
-				m.status = "OAuth error: " + err.Error()
+		cfg := config.Get()
+		provCfg, ok := cfg.Providers[provider]
+		if !ok {
+			m.status = "Unknown provider: " + provider
+			return m, nil
+		}
+		switch provCfg.AuthType {
+		case "oauth":
+			// Claude uses PKCE code-paste flow, others use callback-based OAuth
+			if provider == "claude" {
+				_, err := auth.StartAnthropicOAuth("max")
+				if err != nil {
+					m.status = "OAuth error: " + err.Error()
+				} else {
+					m.oauthPending = provider
+					m.authInput = ""
+					m.status = "Browser opened - copy code"
+				}
 			} else {
 				m.oauthPending = provider
-				m.authInput = ""
-				m.status = "Browser opened - copy code"
+				m.status = "Opening browser for " + provCfg.Name + "..."
+				return m, startOAuthForProvider(provider)
 			}
-		case "grok":
+		case "api_key":
 			m.apiKeyPending = provider
 			m.authInput = ""
-			m.status = "Enter xAI API key"
-		case "gpt":
-			m.status = "Opening browser for OpenAI..."
-			return m, startOpenAIOAuth()
-		case "gemini":
-			m.status = "Opening browser for Google..."
-			return m, startGoogleOAuth()
+			m.status = "Enter API key for " + provCfg.Name
 		default:
-			m.status = "Not implemented for " + provider
+			m.apiKeyPending = provider
+			m.authInput = ""
+			m.status = "Enter credentials for " + provCfg.Name
 		}
 	} else {
 		m.defaultProvider = provider
