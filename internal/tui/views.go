@@ -67,13 +67,57 @@ func (m Model) renderChat() string {
 	inputArea := m.renderInput()
 	statusBar := m.renderStatusBar()
 
-	return lipgloss.JoinVertical(
+	result := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		chatArea,
 		inputArea,
 		statusBar,
 	)
+
+	if m.infoPanelCmp.IsVisible() {
+		panel := m.infoPanelCmp.View()
+		result = overlayRight(result, panel, m.width)
+	}
+
+	return result
+}
+
+// overlayRight places panel on the right side of base, line by line.
+func overlayRight(base, panel string, totalWidth int) string {
+	baseLines := strings.Split(base, "\n")
+	panelLines := strings.Split(panel, "\n")
+
+	panelW := lipgloss.Width(panel)
+	if panelW == 0 {
+		return base
+	}
+
+	out := make([]string, len(baseLines))
+	for i, baseLine := range baseLines {
+		if i < len(panelLines) && panelLines[i] != "" {
+			baseW := lipgloss.Width(baseLine)
+			availBase := totalWidth - panelW
+			if availBase < 0 {
+				availBase = 0
+			}
+			// Truncate base line if it would overlap the panel
+			if baseW > availBase {
+				baseLine = lipgloss.NewStyle().Width(availBase).Render(baseLine)
+			} else {
+				// Pad base to reach the panel position
+				pad := availBase - baseW
+				if pad > 0 {
+					baseLine = baseLine + strings.Repeat(" ", pad)
+				}
+			}
+			out[i] = baseLine + panelLines[i]
+		} else {
+			out[i] = baseLine
+		}
+	}
+
+	return strings.Join(out, "\n")
 }
 
 func (m Model) renderHeader() string {

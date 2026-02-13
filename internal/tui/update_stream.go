@@ -64,6 +64,7 @@ func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
 			m.saveLastMessage()
 			m.updateViewport()
 			m.syncStatusBar()
+			m.syncInfoPanel()
 
 			// Desktop notification
 			if m.notificationsOn {

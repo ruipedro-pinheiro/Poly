@@ -107,14 +107,6 @@ func (s *statusCmp) Update(msg tea.Msg) (layout.Model, tea.Cmd) {
 }
 
 func (s *statusCmp) View() string {
-	provColor := s.providerColor
-	if provColor == nil {
-		provColor = styles.Overlay1
-	}
-	providerStyle := lipgloss.NewStyle().
-		Foreground(provColor).
-		Bold(true)
-
 	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
 	sepStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
 	sep := sepStyle.Render(" · ")
@@ -172,10 +164,8 @@ func (s *statusCmp) View() string {
 			Render("✓ Ready")
 	}
 
-	provider := providerStyle.Render("@" + s.provider)
-
-	// Assemble: left ... center ... status  provider
-	right := statusBadge + "  " + provider
+	// Assemble: left ... center ... status
+	right := statusBadge
 
 	// Build the full line
 	var parts []string
@@ -195,18 +185,11 @@ func (s *statusCmp) View() string {
 
 	line := left + strings.Repeat(" ", gap) + right
 
-	// Top border line in Surface2 for separation
-	topBorder := lipgloss.NewStyle().
-		Foreground(styles.Surface2).
-		Render(strings.Repeat("─", s.width))
-
-	bar := lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Background(styles.Mantle).
 		Width(s.width).
 		Padding(0, 1).
 		Render(line)
-
-	return topBorder + "\n" + bar
 }
 
 func (s *statusCmp) SetWidth(w int) tea.Cmd {

@@ -10,6 +10,7 @@ import (
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
+	"github.com/pedromelo/poly/internal/tui/components/infopanel"
 	"github.com/pedromelo/poly/internal/tui/components/status"
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 )
@@ -129,8 +130,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.headerBar.SetCwd(cwd)
 		m.statusBar.SetWidth(m.width)
+		m.infoPanelCmp.SetSize(infopanel.PanelWidth, m.height)
 		m.updateViewport()
 		m.syncStatusBar()
+		m.syncInfoPanel()
 
 		return m, nil
 	}
@@ -162,6 +165,37 @@ func (m *Model) syncStatusBar() {
 		CacheRead:     m.sessionCacheReadTokens,
 		Cost:          m.sessionCost,
 	})
+}
+
+// syncInfoPanel pushes the current Model state into the info panel component
+func (m *Model) syncInfoPanel() {
+	m.infoPanelCmp.SetProvider(m.defaultProvider, theme.ProviderColor(m.defaultProvider))
+	m.infoPanelCmp.SetThinkingMode(m.thinkingMode)
+	m.infoPanelCmp.SetTokenInfo(
+		m.sessionInputTokens, m.sessionOutputTokens,
+		m.sessionCacheCreationTokens, m.sessionCacheReadTokens,
+		m.sessionCost,
+	)
+	m.infoPanelCmp.SetYoloMode(tools.YoloMode)
+
+	// Modified files
+	files := make([]infopanel.ModifiedFile, len(m.modifiedFiles))
+	for i, f := range m.modifiedFiles {
+		files[i] = infopanel.ModifiedFile{Path: f}
+	}
+	m.infoPanelCmp.SetModifiedFiles(files)
+
+	// Providers
+	providerStatuses := make([]infopanel.ProviderStatus, 0, len(m.controlRoomProviders))
+	for _, name := range m.controlRoomProviders {
+		_, connected := m.providers[name]
+		providerStatuses = append(providerStatuses, infopanel.ProviderStatus{
+			Name:      name,
+			Connected: connected,
+			Color:     theme.ProviderColor(name),
+		})
+	}
+	m.infoPanelCmp.SetProviders(providerStatuses)
 }
 
 // setStatus sets a status message on both the legacy field and the component

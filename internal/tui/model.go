@@ -19,6 +19,7 @@ import (
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 	"github.com/pedromelo/poly/internal/tui/styles"
 	"github.com/pedromelo/poly/internal/tui/components/header"
+	"github.com/pedromelo/poly/internal/tui/components/infopanel"
 	"github.com/pedromelo/poly/internal/tui/components/splash"
 	"github.com/pedromelo/poly/internal/tui/components/status"
 )
@@ -140,9 +141,10 @@ type Model struct {
 	sessionListFiltering bool   // true when filter input is active
 
 	// Components
-	headerBar  header.Header
-	statusBar  status.StatusCmp
-	splashCmp  splash.Splash
+	headerBar     header.Header
+	statusBar     status.StatusCmp
+	splashCmp     splash.Splash
+	infoPanelCmp  infopanel.InfoPanel
 }
 
 // New creates a new TUI model
@@ -256,6 +258,7 @@ func New() Model {
 		headerBar:            header.New(),
 		statusBar:            status.New(),
 		splashCmp:            splash.New(),
+		infoPanelCmp:         infopanel.New(),
 	}
 }
 

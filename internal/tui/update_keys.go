@@ -146,6 +146,11 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(msg, m.keys.InfoPanel):
+		m.infoPanelCmp.Toggle()
+		m.syncInfoPanel()
+		return m, nil
+
 	case key.Matches(msg, m.keys.ThinkingToggle):
 		m.thinkingMode = !m.thinkingMode
 		if m.thinkingMode {
@@ -308,6 +313,11 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.streamTokenCount = 0
 			m.statusBar.Update(status.SetStreamingMsg{Active: false})
 			m.status = "Cancelled"
+		}
+		// Close info panel if visible (before other dismiss logic)
+		if m.infoPanelCmp.IsVisible() && m.state == viewChat {
+			m.infoPanelCmp.Toggle()
+			return m, nil
 		}
 		if m.focused == "messages" {
 			m.focused = "input"

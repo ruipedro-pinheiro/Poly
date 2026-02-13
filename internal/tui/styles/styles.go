@@ -8,7 +8,7 @@ import "charm.land/lipgloss/v2"
 type BorderStyles struct {
 	Message  lipgloss.Border // chat messages: RoundedBorder full box
 	Dialog   lipgloss.Border // dialogs/overlays: RoundedBorder
-	Panel    lipgloss.Border // sidebar panels: NormalBorder (left only)
+	Panel    lipgloss.Border // side panels: NormalBorder (left only)
 	Input    lipgloss.Border // editor/input: RoundedBorder
 	ToolCall lipgloss.Border // tool call blocks: RoundedBorder
 }

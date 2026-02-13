@@ -36,6 +36,9 @@ type KeyMap struct {
 	Tab      key.Binding
 	ShiftTab key.Binding
 
+	// Info panel
+	InfoPanel key.Binding
+
 	// Control Room actions
 	Disconnect key.Binding
 }
@@ -126,6 +129,10 @@ func DefaultKeyMap() KeyMap {
 		ShiftTab: key.NewBinding(
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "prev"),
+		),
+		InfoPanel: key.NewBinding(
+			key.WithKeys("ctrl+i"),
+			key.WithHelp("ctrl+i", "info panel"),
 		),
 		Disconnect: key.NewBinding(
 			key.WithKeys("backspace", "delete"),
