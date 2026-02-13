@@ -1,0 +1,404 @@
+package tui
+
+import (
+	"image/color"
+	"strings"
+
+	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/auth"
+	"github.com/pedromelo/poly/internal/theme"
+	"github.com/pedromelo/poly/internal/tui/core"
+	splashPkg "github.com/pedromelo/poly/internal/tui/components/splash"
+	"github.com/pedromelo/poly/internal/tui/styles"
+)
+
+// dialogStyle returns the standard dialog container style
+func dialogStyle(width int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Mauve).
+		Padding(1, 2).
+		Width(width)
+}
+
+// dialogWidth computes a responsive dialog width: preferred, clamped to terminal
+func dialogWidth(preferred, termWidth, minWidth int) int {
+	w := preferred
+	if termWidth-6 < w {
+		w = termWidth - 6
+	}
+	if w < minWidth {
+		w = minWidth
+	}
+	return w
+}
+
+// placeDialog centers a dialog string on the full screen
+func placeDialog(content string, width, height int) string {
+	return lipgloss.Place(
+		width, height,
+		lipgloss.Center, lipgloss.Center,
+		content,
+	)
+}
+
+func (m Model) renderSplash() string {
+	storage := auth.GetStorage()
+	providers := []struct {
+		name  string
+		color color.Color
+	}{
+		{"claude", theme.Peach},
+		{"gpt", theme.Green},
+		{"gemini", theme.Blue},
+		{"grok", theme.Sky},
+	}
+
+	var statuses []splashPkg.ProviderStatus
+	for _, p := range providers {
+		statuses = append(statuses, splashPkg.ProviderStatus{
+			Name:      p.name,
+			Connected: storage.IsConnected(p.name),
+			Color:     p.color,
+		})
+	}
+
+	m.splashCmp.SetProviders(statuses)
+	m.splashCmp.SetSize(m.width, m.height)
+	return m.splashCmp.View()
+}
+
+func (m Model) renderHelp() string {
+	header := core.Title("Help", 44, styles.Mauve, styles.Surface2)
+
+	sectionStyle := lipgloss.NewStyle().
+		Foreground(theme.Mauve).
+		Bold(true)
+
+	keyStyle := lipgloss.NewStyle().
+		Foreground(theme.Lavender).
+		Bold(true)
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(theme.Subtext1)
+
+	dimStyle := lipgloss.NewStyle().
+		Foreground(theme.Overlay0)
+
+	var content strings.Builder
+	content.WriteString(header + "\n\n")
+
+	// Navigation section
+	content.WriteString(sectionStyle.Render("  NAVIGATION") + "\n")
+	navKeys := []struct{ key, desc string }{
+		{"Ctrl+D", "Control Room"},
+		{"Ctrl+O", "Model Picker"},
+		{"Ctrl+K", "Command Palette"},
+		{"Ctrl+H", "This help"},
+	}
+	for _, k := range navKeys {
+		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	}
+	content.WriteString("\n")
+
+	// Chat section
+	content.WriteString(sectionStyle.Render("  CHAT") + "\n")
+	chatKeys := []struct{ key, desc string }{
+		{"Enter", "Send message"},
+		{"Esc", "Cancel / Close"},
+		{"Ctrl+L", "Clear chat"},
+		{"Ctrl+N", "New session"},
+		{"Ctrl+T", "Toggle thinking"},
+	}
+	for _, k := range chatKeys {
+		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	}
+	content.WriteString("\n")
+
+	// Mentions section
+	content.WriteString(sectionStyle.Render("  MENTIONS") + "\n")
+	mentions := []struct{ key, desc string }{
+		{"@claude", "Claude"},
+		{"@gpt", "GPT"},
+		{"@gemini", "Gemini"},
+		{"@grok", "Grok"},
+		{"@all", "All providers"},
+	}
+	for _, k := range mentions {
+		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	}
+	content.WriteString("\n")
+
+	// Commands section
+	content.WriteString(sectionStyle.Render("  COMMANDS") + "\n")
+	commands := []struct{ key, desc string }{
+		{"/clear", "Clear chat"},
+		{"/model", "Change model"},
+		{"/think", "Toggle thinking"},
+		{"/sidebar", "Toggle sidebar"},
+		{"/export", "Export session (md/json)"},
+	}
+	for _, k := range commands {
+		content.WriteString("  " + keyStyle.Width(10).Render(k.key) + descStyle.Render(k.desc) + "\n")
+	}
+
+	content.WriteString("\n")
+	content.WriteString(dimStyle.Render("  Esc to close"))
+
+	w := dialogWidth(48, m.width, 38)
+	dialog := dialogStyle(w).Render(content.String())
+	return placeDialog(dialog, m.width, m.height)
+}
+
+func (m Model) renderControlRoom() string {
+	header := core.Title("Control Room", 40, styles.Mauve, styles.Surface2)
+
+	storage := auth.GetStorage()
+
+	type provInfo struct {
+		icon     string
+		authType string
+	}
+	providerInfo := map[string]provInfo{
+		"claude": {">>", "API Key"},
+		"gpt":    {">>", "OAuth"},
+		"gemini": {">>", "OAuth"},
+		"grok":   {">>", "API Key"},
+	}
+
+	var content strings.Builder
+	content.WriteString(header + "\n\n")
+
+	w := dialogWidth(52, m.width, 40)
+	innerWidth := w - 6 // padding + border
+
+	for i, providerName := range m.controlRoomProviders {
+		isSelected := i == m.controlRoomIndex
+		isConnected := storage.IsConnected(providerName)
+		isDefault := m.defaultProvider == providerName
+		info := providerInfo[providerName]
+
+		var row strings.Builder
+
+		// Selection cursor
+		if isSelected {
+			row.WriteString(lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render(" > "))
+		} else {
+			row.WriteString("   ")
+		}
+
+		// Icon + Name
+		iconStyle := lipgloss.NewStyle().Foreground(theme.ProviderColor(providerName))
+		nameStyle := lipgloss.NewStyle().
+			Foreground(theme.ProviderColor(providerName)).
+			Bold(true)
+		if info.icon != "" {
+			row.WriteString(iconStyle.Render(info.icon) + " ")
+		}
+		row.WriteString(nameStyle.Width(8).Render(providerName))
+
+		// Status badge
+		if isConnected {
+			authInfo := storage.GetAuth(providerName)
+			authLabel := "API"
+			if authInfo != nil && authInfo.Type == "oauth" {
+				authLabel = "OAuth"
+			}
+			badge := lipgloss.NewStyle().
+				Foreground(theme.Base).
+				Background(theme.Green).
+				Padding(0, 1).
+				Render(authLabel)
+			row.WriteString(" " + badge)
+		} else {
+			badge := lipgloss.NewStyle().
+				Foreground(theme.Overlay0).
+				Render("- " + info.authType)
+			row.WriteString(" " + badge)
+		}
+
+		// Default star
+		if isDefault {
+			row.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render("  *"))
+		}
+
+		// Row style: selected gets a subtle left accent, not a full background bar
+		rowStr := row.String()
+		if isSelected {
+			rowStr = lipgloss.NewStyle().
+				BorderStyle(lipgloss.ThickBorder()).
+				BorderLeft(true).
+				BorderRight(false).
+				BorderTop(false).
+				BorderBottom(false).
+				BorderForeground(theme.Mauve).
+				Width(innerWidth).
+				Render(rowStr)
+		}
+		content.WriteString(rowStr + "\n")
+	}
+
+	content.WriteString("\n")
+
+	// Auth input area
+	if m.oauthPending != "" || m.apiKeyPending != "" {
+		var label, placeholder string
+		if m.oauthPending != "" {
+			label = "Paste OAuth code for " + m.oauthPending
+			placeholder = "waiting for code..."
+		} else {
+			label = "Paste API key for " + m.apiKeyPending
+			placeholder = "waiting for key..."
+		}
+
+		content.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render(label) + "\n")
+
+		if m.authStatusMsg != "" {
+			statusColor := theme.Green
+			if strings.HasPrefix(m.authStatusMsg, "Error:") {
+				statusColor = theme.Red
+			} else if m.authStatusMsg == "Exchanging code..." {
+				statusColor = theme.Overlay1
+			}
+			content.WriteString(lipgloss.NewStyle().Foreground(statusColor).Render(m.authStatusMsg) + "\n")
+		}
+		content.WriteString("\n")
+
+		inputContent := m.authInput
+		if inputContent == "" {
+			inputContent = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render(placeholder)
+		} else {
+			if m.apiKeyPending != "" {
+				if len(inputContent) > 8 {
+					inputContent = inputContent[:4] + strings.Repeat("*", len(inputContent)-8) + inputContent[len(inputContent)-4:]
+				}
+			}
+			if len(inputContent) > 38 {
+				inputContent = inputContent[:35] + "..."
+			}
+		}
+
+		inputBox := lipgloss.NewStyle().
+			Foreground(theme.Text).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(theme.Surface2).
+			Padding(0, 1).
+			Width(innerWidth - 2).
+			Render(inputContent)
+
+		content.WriteString(inputBox + "\n\n")
+		hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
+		hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
+		content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" submit · "))
+		content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
+	} else {
+		hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
+		hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
+
+		content.WriteString(hintKey.Render("↑↓") + hintDesc.Render(" navigate · "))
+		content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" connect · "))
+		content.WriteString(hintKey.Render("Del") + hintDesc.Render(" disconnect\n"))
+		content.WriteString(hintKey.Render("n") + hintDesc.Render(" add provider · "))
+		content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" close"))
+	}
+
+	dialog := dialogStyle(w).Render(content.String())
+	return placeDialog(dialog, m.width, m.height)
+}
+
+func (m Model) renderAddProvider() string {
+	header := lipgloss.NewStyle().
+		Foreground(theme.Mauve).
+		Bold(true).
+		Render("+ Add Provider")
+
+	var content strings.Builder
+	content.WriteString(header + "\n")
+
+	w := dialogWidth(46, m.width, 36)
+	sepLen := w - 8
+	if sepLen < 10 {
+		sepLen = 10
+	}
+	content.WriteString(lipgloss.NewStyle().Foreground(theme.Surface2).Render(strings.Repeat("─", sepLen)) + "\n\n")
+
+	fields := []struct {
+		label       string
+		placeholder string
+	}{
+		{"ID", "mistral, ollama, groq..."},
+		{"URL", "https://api.mistral.ai/v1"},
+		{"API Key", "sk-xxx (empty for local)"},
+		{"Model", "mistral-large, llama3..."},
+	}
+
+	for i, field := range fields {
+		isSelected := i == m.addProviderField
+
+		labelStyle := lipgloss.NewStyle().Foreground(theme.Overlay1).Width(10)
+		if isSelected {
+			labelStyle = labelStyle.Foreground(theme.Mauve).Bold(true)
+		}
+		content.WriteString(labelStyle.Render(field.label + ":"))
+
+		value := ""
+		if i < len(m.addProviderValues) {
+			value = m.addProviderValues[i]
+		}
+
+		inputStyle := lipgloss.NewStyle().
+			Foreground(theme.Text).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(theme.Surface2).
+			Padding(0, 1).
+			Width(w - 16)
+
+		if isSelected {
+			inputStyle = inputStyle.BorderForeground(theme.Mauve)
+		}
+
+		displayValue := value
+		if displayValue == "" {
+			displayValue = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render(field.placeholder)
+		} else if i == 2 && len(displayValue) > 4 {
+			displayValue = displayValue[:2] + strings.Repeat("*", len(displayValue)-4) + displayValue[len(displayValue)-2:]
+		}
+
+		if isSelected {
+			displayValue += "_"
+		}
+
+		content.WriteString(inputStyle.Render(displayValue) + "\n")
+	}
+
+	// Format selector
+	content.WriteString("\n")
+	isFormatSelected := m.addProviderField == 4
+	formatLabel := lipgloss.NewStyle().Foreground(theme.Overlay1).Width(10)
+	if isFormatSelected {
+		formatLabel = formatLabel.Foreground(theme.Mauve).Bold(true)
+	}
+	content.WriteString(formatLabel.Render("Format:"))
+
+	formats := []string{"OpenAI", "Anthropic", "Google"}
+	for i, f := range formats {
+		style := lipgloss.NewStyle().Foreground(theme.Overlay0).Padding(0, 1)
+		if i == m.addProviderFormat {
+			style = style.Background(theme.Mauve).Foreground(theme.Base).Bold(true)
+		}
+		content.WriteString(style.Render(f))
+	}
+	content.WriteString("\n")
+
+	// Hints
+	content.WriteString("\n")
+	hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	content.WriteString(hintKey.Render("Tab") + hintDesc.Render(" next · "))
+	content.WriteString(hintKey.Render("◁▷") + hintDesc.Render(" format · "))
+	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" save · "))
+	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
+
+	dialog := dialogStyle(w).Render(content.String())
+	return placeDialog(dialog, m.width, m.height)
+}

@@ -1,0 +1,22 @@
+# Binaries
+poly
+main
+*.exe
+
+# Temp files
+tmp/
+test_*.txt
+proof.txt
+Poly.txt
+CHANGELOG-SESSION.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
