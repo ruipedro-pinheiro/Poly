@@ -31,7 +31,10 @@ func (t *GitStatusTool) Parameters() map[string]interface{} {
 }
 
 func (t *GitStatusTool) Execute(args map[string]interface{}) ToolResult {
-	dir := gitWorkDir(args)
+	dir, err := gitWorkDir(args)
+	if err != nil {
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
+	}
 
 	cmd := exec.Command("git", "status", "--porcelain=v2", "--branch")
 	cmd.Dir = dir
@@ -75,7 +78,10 @@ func (t *GitDiffTool) Parameters() map[string]interface{} {
 }
 
 func (t *GitDiffTool) Execute(args map[string]interface{}) ToolResult {
-	dir := gitWorkDir(args)
+	dir, err := gitWorkDir(args)
+	if err != nil {
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
+	}
 
 	gitArgs := []string{"diff"}
 	if staged, ok := args["staged"].(bool); ok && staged {
@@ -127,7 +133,10 @@ func (t *GitLogTool) Parameters() map[string]interface{} {
 }
 
 func (t *GitLogTool) Execute(args map[string]interface{}) ToolResult {
-	dir := gitWorkDir(args)
+	dir, err := gitWorkDir(args)
+	if err != nil {
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
+	}
 
 	count := 10
 	if c, ok := args["count"].(float64); ok && c > 0 {
@@ -161,14 +170,19 @@ func (t *GitLogTool) Execute(args map[string]interface{}) ToolResult {
 	return ToolResult{Content: result}
 }
 
-// gitWorkDir returns the working directory from args or falls back to cwd
-func gitWorkDir(args map[string]interface{}) string {
+// gitWorkDir returns the working directory from args or falls back to cwd.
+// The path is validated to prevent running git commands outside the workspace.
+func gitWorkDir(args map[string]interface{}) (string, error) {
 	if path, ok := args["path"].(string); ok && path != "" {
-		return path
+		validated, err := ValidatePath(path)
+		if err != nil {
+			return "", fmt.Errorf("invalid path: %w", err)
+		}
+		return validated, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "."
+		return ".", nil
 	}
-	return cwd
+	return cwd, nil
 }

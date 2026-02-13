@@ -177,6 +177,7 @@ func (m *Model) handleCompareResult(msg CompareResultMsg) tea.Cmd {
 		Content:  content,
 		Provider: msg.Provider,
 	})
+	m.saveMessageAt(len(m.messages) - 1)
 	m.updateViewport()
 
 	// Check if all providers have responded

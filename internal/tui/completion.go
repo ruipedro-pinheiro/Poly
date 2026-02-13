@@ -5,16 +5,17 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/skills"
 )
 
-// providerMentions is the list of all @provider mentions
-var providerMentions = []string{
-	"@all",
-	"@claude",
-	"@gemini",
-	"@gpt",
-	"@grok",
+// getProviderMentions builds the @mention list dynamically from config
+func getProviderMentions() []string {
+	mentions := []string{"@all"}
+	for _, name := range config.GetProviderNames() {
+		mentions = append(mentions, "@"+name)
+	}
+	return mentions
 }
 
 // completionState tracks the current tab completion session
@@ -88,7 +89,7 @@ func (m *Model) getCompletions(input string, cursorPos int) (candidates []string
 		lower := strings.ToLower(prefix)
 
 		// Provider mentions
-		for _, p := range providerMentions {
+		for _, p := range getProviderMentions() {
 			if strings.HasPrefix(p, lower) {
 				candidates = append(candidates, p)
 			}

@@ -93,9 +93,6 @@ type Provider interface {
 	// ToolFormat returns how this provider expects tool definitions
 	ToolFormat() ToolFormat
 
-	// Send sends a message and returns the complete response
-	Send(ctx context.Context, messages []Message, tools []ToolDefinition) (*Response, error)
-
 	// Stream sends a message and streams the response
 	Stream(ctx context.Context, messages []Message, tools []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent
 

@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/pedromelo/poly/internal/llm"
+	"github.com/pedromelo/poly/internal/mcp"
+	"github.com/pedromelo/poly/internal/sandbox"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/tui/components/infopanel"
@@ -165,6 +167,7 @@ func (m *Model) syncStatusBar() {
 		CacheRead:     m.sessionCacheReadTokens,
 		Cost:          m.sessionCost,
 	})
+	m.headerBar.SetTokens(m.sessionInputTokens, m.sessionOutputTokens, m.sessionCost)
 }
 
 // syncInfoPanel pushes the current Model state into the info panel component
@@ -203,6 +206,23 @@ func (m *Model) syncInfoPanel() {
 		})
 	}
 	m.infoPanelCmp.SetProviders(providerStatuses)
+
+	// MCP servers
+	if mcp.Global != nil {
+		mcpStatuses := mcp.Global.Status()
+		mcpServers := make([]infopanel.MCPServer, len(mcpStatuses))
+		for i, s := range mcpStatuses {
+			mcpServers[i] = infopanel.MCPServer{
+				Name:      s.Name,
+				Connected: s.Connected,
+				ToolCount: s.ToolCount,
+			}
+		}
+		m.infoPanelCmp.SetMCPServers(mcpServers)
+	}
+
+	// Sandbox mode
+	m.infoPanelCmp.SetSandboxMode(sandbox.Enabled)
 }
 
 // setStatus sets a status message on both the legacy field and the component

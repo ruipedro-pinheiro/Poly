@@ -276,19 +276,6 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%.1fMB", float64(size)/(1024*1024))
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // WalkDir helper that respects .gitignore patterns (simplified)
 func WalkDir(root string, maxDepth int, fn func(path string, d fs.DirEntry) error) error {

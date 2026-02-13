@@ -53,10 +53,6 @@ func (p *GeminiProvider) GetModel() string       { return p.config.Model }
 func (p *GeminiProvider) SupportsTools() bool { return true }
 func (p *GeminiProvider) IsConfigured() bool     { return auth.GetStorage().IsConnected("gemini") }
 
-func (p *GeminiProvider) Send(ctx context.Context, messages []Message, tools []ToolDefinition) (*Response, error) {
-	return nil, errors.New("not implemented")
-}
-
 func (p *GeminiProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
 	eventChan := make(chan StreamEvent, 64)
 

@@ -73,10 +73,6 @@ func (p *GPTProvider) IsConfigured() bool {
 	return auth.GetStorage().IsConnected("gpt")
 }
 
-func (p *GPTProvider) Send(ctx context.Context, messages []Message, toolDefs []ToolDefinition) (*Response, error) {
-	return nil, errors.New("not implemented")
-}
-
 func (p *GPTProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
 	eventChan := make(chan StreamEvent, 64)
 

@@ -162,11 +162,9 @@ func (t *ApplyDiffTool) Execute(args map[string]interface{}) ToolResult {
 	delete(proposals, id) // Remove after applying
 	proposalsMu.Unlock()
 
-	cwd, _ := os.Getwd()
-	targetPath := filepath.Join(cwd, proposal.FilePath)
-	absPath, err := filepath.Abs(targetPath)
+	absPath, err := ValidatePath(proposal.FilePath)
 	if err != nil {
-		return ToolResult{Content: "Error: invalid path", IsError: true}
+		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
 
 	// Create parent directories if needed

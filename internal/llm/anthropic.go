@@ -55,10 +55,6 @@ func (p *AnthropicProvider) IsConfigured() bool {
 	return auth.GetStorage().IsConnected("claude")
 }
 
-func (p *AnthropicProvider) Send(ctx context.Context, messages []Message, toolDefs []ToolDefinition) (*Response, error) {
-	return nil, errors.New("not implemented - use Stream")
-}
-
 func (p *AnthropicProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
 	eventChan := make(chan StreamEvent, 64)
 

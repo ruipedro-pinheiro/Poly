@@ -546,11 +546,6 @@ func (m *Model) addMessage(msg Message) {
 	})
 }
 
-// saveSession saves the current state to the session
-func (m *Model) saveSession() {
-	session.SetProvider(m.defaultProvider)
-}
-
 // saveLastMessage persists the last message (called when streaming completes)
 func (m *Model) saveLastMessage() {
 	if len(m.messages) == 0 {

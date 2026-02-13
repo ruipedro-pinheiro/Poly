@@ -11,13 +11,11 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/llm"
-	"github.com/pedromelo/poly/internal/sandbox"
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/updater"
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
-	"github.com/pedromelo/poly/internal/tui/styles"
 	"github.com/pedromelo/poly/internal/tui/components/header"
 	"github.com/pedromelo/poly/internal/tui/components/infopanel"
 	"github.com/pedromelo/poly/internal/tui/components/splash"
@@ -95,7 +93,6 @@ type Model struct {
 	// Command palette state
 	paletteFilter string
 	paletteIndex  int
-	paletteCommands []CommandEntry
 
 	// Thinking display state
 	thinkingExpanded map[int]bool
@@ -254,7 +251,6 @@ func New() Model {
 		thinkingMode:         true,
 		modelVariant:         "think",
 		thinkingExpanded:     make(map[int]bool),
-		paletteCommands:      buildCommandList(),
 		commands:             initCommands(),
 		inputHistory:         config.LoadHistory(),
 		inputHistoryIdx:      -1,
@@ -307,110 +303,3 @@ func checkForUpdate() tea.Cmd {
 	}
 }
 
-// buildCommandList returns all available commands for the palette
-func buildCommandList() []CommandEntry {
-	return []CommandEntry{
-		{Name: "New Session", Shortcut: "ctrl+n", Action: func(m *Model) {
-			m.messages = []Message{}
-			session.Clear()
-			m.updateViewport()
-			m.status = "New session"
-		}},
-		{Name: "Switch Model", Shortcut: "ctrl+o", Action: func(m *Model) {
-			m.state = viewModelPicker
-			m.modelPickerIndex = 0
-			m.modelPickerFilter = ""
-		}},
-		{Name: "Toggle Thinking", Shortcut: "", Action: func(m *Model) {
-			m.thinkingMode = !m.thinkingMode
-			if m.thinkingMode {
-				m.modelVariant = "think"
-				m.status = "Thinking mode ON"
-			} else {
-				m.modelVariant = "default"
-				m.status = "Thinking mode OFF"
-			}
-		}},
-		{Name: "Session List", Shortcut: "ctrl+s", Action: func(m *Model) {
-			m.state = viewSessionList
-			m.sessionListIndex = 0
-		}},
-		{Name: "Control Room", Shortcut: "ctrl+d", Action: func(m *Model) {
-			m.state = viewControlRoom
-			m.controlRoomIndex = 0
-		}},
-		{Name: "Toggle Help", Shortcut: "ctrl+h", Action: func(m *Model) {
-			if m.state == viewHelp {
-				m.state = viewChat
-			} else {
-				m.state = viewHelp
-			}
-		}},
-		{Name: "Clear Chat", Shortcut: "ctrl+l", Action: func(m *Model) {
-			m.messages = []Message{}
-			session.Clear()
-			m.updateViewport()
-			m.status = "Chat cleared"
-		}},
-		{Name: "Compact Context", Shortcut: "", Action: func(m *Model) {
-			if !m.isStreaming && len(m.messages) > llm.MinMessagesToKeep {
-				m.isCompacting = true
-				m.status = "Compacting context..."
-			} else {
-				m.status = "Not enough messages to compact"
-			}
-		}},
-		{Name: "Cycle Theme", Shortcut: "", Action: func(m *Model) {
-			next := styles.NextTheme()
-			theme.SetTheme(next)
-			config.SetColorTheme(string(next))
-			m.status = "Theme: " + string(next)
-		}},
-		{Name: "Toggle Notifications", Shortcut: "", Action: func(m *Model) {
-			m.notificationsOn = !m.notificationsOn
-			config.SetNotifications(m.notificationsOn)
-			if m.notificationsOn {
-				m.status = "Notifications ON"
-			} else {
-				m.status = "Notifications OFF"
-			}
-		}},
-		{Name: "Toggle Sandbox", Shortcut: "", Action: func(m *Model) {
-			if !sandbox.Available() {
-				m.status = "No container runtime found (install podman or docker)"
-			} else {
-				sandbox.Enabled = !sandbox.Enabled
-				config.SetSandbox(sandbox.Enabled)
-				if sandbox.Enabled {
-					m.status = "Sandbox ON (" + sandbox.Detect() + ")"
-				} else {
-					m.status = "Sandbox OFF"
-				}
-			}
-		}},
-		{Name: "Toggle YOLO Mode", Shortcut: "", Action: func(m *Model) {
-			tools.YoloMode = !tools.YoloMode
-			if tools.YoloMode {
-				m.status = "YOLO mode ON"
-			} else {
-				tools.ResetAllowList()
-				m.status = "YOLO mode OFF"
-			}
-		}},
-		{Name: "Export Markdown", Shortcut: "", Action: func(m *Model) {
-			if path, err := session.ExportMarkdown(); err != nil {
-				m.status = "Export failed: " + err.Error()
-			} else {
-				m.status = "Exported to " + path
-			}
-		}},
-		{Name: "Export JSON", Shortcut: "", Action: func(m *Model) {
-			if path, err := session.ExportJSON(); err != nil {
-				m.status = "Export failed: " + err.Error()
-			} else {
-				m.status = "Exported to " + path
-			}
-		}},
-		{Name: "Quit", Shortcut: "ctrl+c", Action: nil}, // handled specially
-	}
-}

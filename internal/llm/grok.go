@@ -73,10 +73,6 @@ func (p *GrokProvider) IsConfigured() bool {
 	return auth.GetStorage().IsConnected("grok")
 }
 
-func (p *GrokProvider) Send(ctx context.Context, messages []Message, toolDefs []ToolDefinition) (*Response, error) {
-	return nil, errors.New("not implemented")
-}
-
 func (p *GrokProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
 	eventChan := make(chan StreamEvent, 64)
 

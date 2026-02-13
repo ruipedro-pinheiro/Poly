@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -58,7 +57,7 @@ func (p *CustomProvider) Color() string       { return p.config.Color }
 func (p *CustomProvider) GetModel() string    { return p.config.Model }
 func (p *CustomProvider) SetModel(m string)   { p.config.Model = m }
 func (p *CustomProvider) SupportsTools() bool { return true }
-func (p *CustomProvider) IsConfigured() bool  { return true } // Custom providers are always "configured"
+func (p *CustomProvider) IsConfigured() bool  { return p.config.APIKey != "" }
 
 func (p *CustomProvider) ToolFormat() ToolFormat {
 	switch p.config.Format {
@@ -69,10 +68,6 @@ func (p *CustomProvider) ToolFormat() ToolFormat {
 	default:
 		return ToolFormatOpenAI
 	}
-}
-
-func (p *CustomProvider) Send(ctx context.Context, messages []Message, toolDefs []ToolDefinition) (*Response, error) {
-	return nil, errors.New("not implemented - use Stream")
 }
 
 func (p *CustomProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
@@ -212,7 +207,7 @@ func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages 
 		}
 	}
 
-	eventChan <- StreamEvent{Type: "content", Content: "\n[warning] Max tool turns reached\n"}
+	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
 	eventChan <- StreamEvent{
 		Type:     "done",
 		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
@@ -322,7 +317,7 @@ func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessag
 		})
 	}
 
-	eventChan <- StreamEvent{Type: "content", Content: "\n[warning] Max tool turns reached\n"}
+	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
 	eventChan <- StreamEvent{
 		Type:     "done",
 		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
@@ -439,7 +434,7 @@ func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages 
 		})
 	}
 
-	eventChan <- StreamEvent{Type: "content", Content: "\n[warning] Max tool turns reached\n"}
+	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
 	eventChan <- StreamEvent{
 		Type:     "done",
 		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
