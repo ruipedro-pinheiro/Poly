@@ -59,9 +59,13 @@ func (h *headerCmp) View() string {
 	// Logo
 	logo := core.GradientText(core.IconModel+" POLY", styles.Mauve, styles.Lavender, true)
 
-	// Default provider: colored dot + name (no @ since multiple providers can be in the same chat)
+	// Provider name with truncation (max 12 chars → 10 + "..")
+	provDisplay := h.provider
+	if len(provDisplay) > 12 {
+		provDisplay = provDisplay[:10] + ".."
+	}
 	provDot := lipgloss.NewStyle().Foreground(h.providerColor).Render("●")
-	provName := lipgloss.NewStyle().Foreground(h.providerColor).Bold(true).Render(h.provider)
+	provName := lipgloss.NewStyle().Foreground(h.providerColor).Bold(true).Render(provDisplay)
 	provRendered := provDot + " " + provName
 
 	// Context %
@@ -77,23 +81,32 @@ func (h *headerCmp) View() string {
 	}
 	pctRendered := lipgloss.NewStyle().Foreground(pctColor).Render(pctStr)
 
-	// cwd on the right
-	cwdRendered := ""
-	cwdWidth := 0
-	if h.cwd != "" {
-		cwdRendered = lipgloss.NewStyle().Foreground(styles.Overlay0).Render(h.cwd)
-		cwdWidth = lipgloss.Width(h.cwd)
+	// Responsive: adapt content to terminal width
+	var line string
+	if h.width < 60 {
+		// Minimal: logo + provider only
+		line = logo + sep + provRendered
+	} else if h.width < 80 {
+		// Compact: logo + provider + context%
+		line = logo + sep + provRendered + sep + pctRendered
+	} else {
+		// Full: logo + provider + context% + cwd
+		left := logo + sep + provRendered + sep + pctRendered
+		leftWidth := lipgloss.Width(core.IconModel+" POLY") + 3 + lipgloss.Width("● "+provDisplay) + 3 + lipgloss.Width(pctStr)
+
+		cwdRendered := ""
+		cwdWidth := 0
+		if h.cwd != "" {
+			cwdRendered = lipgloss.NewStyle().Foreground(styles.Overlay0).Render(h.cwd)
+			cwdWidth = lipgloss.Width(h.cwd)
+		}
+
+		gap := h.width - leftWidth - cwdWidth - 4
+		if gap < 1 {
+			gap = 1
+		}
+		line = left + strings.Repeat(" ", gap) + cwdRendered
 	}
-
-	left := logo + sep + provRendered + sep + pctRendered
-	leftWidth := lipgloss.Width(core.IconModel+" POLY") + 3 + lipgloss.Width("● "+h.provider) + 3 + lipgloss.Width(pctStr)
-
-	gap := h.width - leftWidth - cwdWidth - 4
-	if gap < 1 {
-		gap = 1
-	}
-
-	line := left + strings.Repeat(" ", gap) + cwdRendered
 
 	return lipgloss.NewStyle().
 		Width(h.width).

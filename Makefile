@@ -61,6 +61,12 @@ test-coverage:
 lint:
 	go vet ./...
 
+## ci: Run CI checks locally (build + vet + test with race detector)
+ci:
+	go build ./...
+	go vet ./...
+	go test -race -count=1 ./...
+
 ## fmt: Format all Go source files
 fmt:
 	gofmt -w .
@@ -101,4 +107,4 @@ help:
 # Phony declarations
 # ============================================================================
 
-.PHONY: build dev release install test test-verbose test-coverage lint fmt clean setup-42 sandbox-setup version help
+.PHONY: build dev release install test test-verbose test-coverage lint ci fmt clean setup-42 sandbox-setup version help
