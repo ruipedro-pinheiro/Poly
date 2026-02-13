@@ -25,13 +25,23 @@ type ProviderConfig struct {
 	CostTier      int               `json:"cost_tier"`        // 1=cheap, 2=mid, 3=expensive (for @all cascade ordering)
 }
 
+// MCPServerConfig defines an MCP server in the config file
+type MCPServerConfig struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	Type    string            `json:"type,omitempty"` // default: "stdio"
+	URL     string            `json:"url,omitempty"`  // for sse/http
+}
+
 // Config holds all Poly configuration
 type Config struct {
-	Providers       map[string]ProviderConfig `json:"providers"`
-	DefaultProvider string                    `json:"default_provider"`
-	Theme           ThemeConfig               `json:"theme"`
-	Settings        SettingsConfig            `json:"settings"`
-	Hooks           hooks.HooksConfig         `json:"hooks"`
+	Providers       map[string]ProviderConfig  `json:"providers"`
+	DefaultProvider string                     `json:"default_provider"`
+	Theme           ThemeConfig                `json:"theme"`
+	Settings        SettingsConfig             `json:"settings"`
+	Hooks           hooks.HooksConfig          `json:"hooks"`
+	MCPServers      map[string]MCPServerConfig `json:"mcp_servers,omitempty"`
 }
 
 // ThemeConfig defines UI colors
@@ -270,6 +280,15 @@ func GetSandboxImage() string {
 	return "alpine:latest"
 }
 
+// GetMCPServers returns the configured MCP servers
+func GetMCPServers() map[string]MCPServerConfig {
+	cfg := Get()
+	if cfg.MCPServers == nil {
+		return nil
+	}
+	return cfg.MCPServers
+}
+
 // DeleteProvider removes a provider
 func DeleteProvider(id string) {
 	configMu.Lock()
@@ -366,6 +385,16 @@ func mergeConfig(base, user *Config) *Config {
 	}
 	if len(user.Hooks.OnMessage) > 0 {
 		base.Hooks.OnMessage = user.Hooks.OnMessage
+	}
+
+	// Merge MCP servers
+	if len(user.MCPServers) > 0 {
+		if base.MCPServers == nil {
+			base.MCPServers = make(map[string]MCPServerConfig)
+		}
+		for name, srv := range user.MCPServers {
+			base.MCPServers[name] = srv
+		}
 	}
 
 	return base

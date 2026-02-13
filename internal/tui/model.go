@@ -82,6 +82,7 @@ type Model struct {
 	sessionCacheCreationTokens int
 	sessionCacheReadTokens     int
 	sessionCost                float64
+	sessionStartTime           time.Time
 
 	// Response time tracking
 	streamStartTime  time.Time
@@ -245,6 +246,7 @@ func New() Model {
 		commands:             initCommands(),
 		inputHistoryIdx:      -1,
 		approvedTools:        make(map[string]bool),
+		sessionStartTime:     time.Now(),
 		headerBar:            header.New(),
 		sidebarCmp:           sidebar.New(),
 		statusBar:            status.New(),

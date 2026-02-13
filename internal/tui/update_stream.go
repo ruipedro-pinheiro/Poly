@@ -15,6 +15,11 @@ import (
 
 // handleStreamMsg processes a streaming event from a provider
 func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
+	// If streaming was cancelled, drain remaining events without processing
+	if !m.isStreaming {
+		streamEventChan = nil
+		return m, nil
+	}
 	if len(m.messages) > 0 {
 		lastIdx := len(m.messages) - 1
 		if msg.Error != nil {

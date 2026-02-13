@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pedromelo/poly/internal/config"
+	"github.com/pedromelo/poly/internal/skills"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -169,6 +170,28 @@ func BuildSystemPrompt(providerName string, role string) string {
 		prompt.WriteString("This information was saved across sessions. Use it as context.\n")
 		prompt.WriteString(memoryMD)
 		prompt.WriteString("\n\n")
+	}
+
+	// ================================================================
+	// SECTION 4d: Available Skills
+	// ================================================================
+	if skillNames := skills.ListSkills(); len(skillNames) > 0 {
+		prompt.WriteString("=== AVAILABLE SKILLS ===\n")
+		prompt.WriteString("Use /skill <name> to activate a skill. Available skills:\n")
+		for _, name := range skillNames {
+			if sk := skills.GetSkill(name); sk != nil {
+				preview := sk.Content
+				if len(preview) > 100 {
+					preview = preview[:97] + "..."
+				}
+				// Single line preview (no newlines)
+				if idx := strings.Index(preview, "\n"); idx > 0 {
+					preview = preview[:idx]
+				}
+				prompt.WriteString(fmt.Sprintf("- %s: %s\n", name, preview))
+			}
+		}
+		prompt.WriteString("\n")
 	}
 
 	// ================================================================

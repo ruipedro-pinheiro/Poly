@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/llm"
+	"github.com/pedromelo/poly/internal/mcp"
 	"github.com/pedromelo/poly/internal/sandbox"
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/skills"
@@ -391,6 +394,16 @@ func initCommands() *CommandRegistry {
 	})
 
 	r.Register(&Command{
+		Name:        "rewind",
+		Aliases:     []string{"rw"},
+		Description: "Remove last N messages",
+		Usage:       "/rewind [N]",
+		Handler: func(m *Model, args []string) {
+			m.handleRewind(args)
+		},
+	})
+
+	r.Register(&Command{
 		Name:        "retry",
 		Description: "Retry last message",
 		Usage:       "/retry",
@@ -456,6 +469,33 @@ func initCommands() *CommandRegistry {
 		Usage:       "/skill [name]",
 		Handler: func(m *Model, args []string) {
 			m.handleSkillCommand(args)
+		},
+	})
+
+	r.Register(&Command{
+		Name:        "stats",
+		Description: "Show session statistics",
+		Usage:       "/stats",
+		Handler: func(m *Model, args []string) {
+			m.handleStatsCommand()
+		},
+	})
+
+	r.Register(&Command{
+		Name:        "memory",
+		Description: "Show or clear MEMORY.md",
+		Usage:       "/memory [show|clear]",
+		Handler: func(m *Model, args []string) {
+			m.handleMemoryCommand(args)
+		},
+	})
+
+	r.Register(&Command{
+		Name:        "mcp",
+		Description: "List MCP servers and tools",
+		Usage:       "/mcp",
+		Handler: func(m *Model, args []string) {
+			m.handleMCPCommand()
 		},
 	})
 
@@ -718,6 +758,52 @@ func (m *Model) handleUndo() {
 	m.status = "Last exchange removed"
 }
 
+// handleRewind removes the last N messages from the conversation
+func (m *Model) handleRewind(args []string) {
+	if m.isStreaming {
+		m.status = "Cannot rewind while streaming"
+		return
+	}
+	if len(m.messages) == 0 {
+		m.status = "Nothing to rewind"
+		return
+	}
+
+	n := 2 // default: remove last user + assistant pair
+	if len(args) > 0 {
+		parsed, err := strconv.Atoi(args[0])
+		if err != nil || parsed < 1 {
+			m.status = "Usage: /rewind [N] (N must be a positive number)"
+			return
+		}
+		n = parsed
+	}
+
+	// Cap to available messages
+	if n > len(m.messages) {
+		n = len(m.messages)
+	}
+
+	remaining := len(m.messages) - n
+	m.messages = m.messages[:remaining]
+
+	// Re-persist the session
+	sessionMsgs := make([]session.Message, len(m.messages))
+	for i, msg := range m.messages {
+		sessionMsgs[i] = session.Message{
+			Role:     msg.Role,
+			Content:  msg.Content,
+			Provider: msg.Provider,
+			Thinking: msg.Thinking,
+			Images:   msg.Images,
+		}
+	}
+	session.SetMessages(sessionMsgs)
+
+	m.updateViewport()
+	m.status = fmt.Sprintf("Rewound %d messages (%d remaining)", n, remaining)
+}
+
 // handleRetry removes the last exchange and re-sends the last user message
 func (m *Model) handleRetry() {
 	if m.isStreaming {
@@ -856,6 +942,19 @@ func (m *Model) handleConfigCommand() {
 	b.WriteString(fmt.Sprintf("  Notifications: %v\n", config.NotificationsEnabled()))
 	b.WriteString(fmt.Sprintf("  Sandbox: %v\n", cfg.Settings.Sandbox))
 
+	nPre := len(cfg.Hooks.PreTool)
+	nPost := len(cfg.Hooks.PostTool)
+	nMsg := len(cfg.Hooks.OnMessage)
+	total := nPre + nPost + nMsg
+	if total > 0 {
+		b.WriteString(fmt.Sprintf("\nHooks (%d total):\n", total))
+		b.WriteString(fmt.Sprintf("  pre_tool: %d\n", nPre))
+		b.WriteString(fmt.Sprintf("  post_tool: %d\n", nPost))
+		b.WriteString(fmt.Sprintf("  on_message: %d\n", nMsg))
+	} else {
+		b.WriteString("\nHooks: none\n")
+	}
+
 	m.messages = append(m.messages, Message{
 		Role:    "system",
 		Content: b.String(),
@@ -867,4 +966,143 @@ func (m *Model) handleConfigCommand() {
 	} else {
 		m.status = "Config loaded (global only)"
 	}
+}
+
+// handleMCPCommand handles /mcp - lists MCP servers and their tools
+func (m *Model) handleMCPCommand() {
+	if mcp.Global == nil {
+		m.status = "MCP not initialized"
+		return
+	}
+
+	statuses := mcp.Global.Status()
+	if len(statuses) == 0 {
+		m.status = "No MCP servers configured"
+		return
+	}
+
+	var b strings.Builder
+	totalTools := 0
+	connected := 0
+	b.WriteString(fmt.Sprintf("MCP Servers (%d):\n\n", len(statuses)))
+	for _, s := range statuses {
+		icon := "x"
+		if s.Connected {
+			icon = "+"
+			connected++
+		}
+		totalTools += s.ToolCount
+		b.WriteString(fmt.Sprintf("  [%s] %s (%d tools)\n", icon, s.Name, s.ToolCount))
+
+		// List tools for this server
+		if s.Connected {
+			if client, ok := mcp.Global.GetClient(s.Name); ok {
+				for _, t := range client.Tools() {
+					desc := t.Description
+					if len(desc) > 50 {
+						desc = desc[:47] + "..."
+					}
+					b.WriteString(fmt.Sprintf("      - %s: %s\n", t.Name, desc))
+				}
+			}
+		}
+	}
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: b.String(),
+	})
+	m.updateViewport()
+	m.status = fmt.Sprintf("MCP: %d/%d connected, %d tools", connected, len(statuses), totalTools)
+}
+
+// handleMemoryCommand handles /memory [show|clear]
+func (m *Model) handleMemoryCommand(args []string) {
+	sub := "show"
+	if len(args) > 0 {
+		sub = strings.ToLower(args[0])
+	}
+
+	switch sub {
+	case "show":
+		content := config.LoadMemoryMD()
+		if content == "" {
+			m.status = "No memory file found (~/.poly/MEMORY.md)"
+			return
+		}
+		m.messages = append(m.messages, Message{
+			Role:    "system",
+			Content: "MEMORY.md:\n\n" + content,
+		})
+		m.updateViewport()
+		m.status = fmt.Sprintf("Memory loaded (%d bytes)", len(content))
+
+	case "clear":
+		if err := config.ClearMemoryMD(); err != nil {
+			m.status = "No memory file to clear"
+		} else {
+			m.status = "Memory cleared"
+		}
+
+	default:
+		m.status = "Usage: /memory [show|clear]"
+	}
+}
+
+// handleStatsCommand handles /stats - displays session statistics
+func (m *Model) handleStatsCommand() {
+	var b strings.Builder
+	b.WriteString("Session Statistics\n\n")
+
+	// Message count
+	userMsgs, assistantMsgs, toolCalls := 0, 0, 0
+	for _, msg := range m.messages {
+		switch msg.Role {
+		case "user":
+			userMsgs++
+		case "assistant":
+			assistantMsgs++
+			toolCalls += len(msg.ToolCalls)
+		}
+	}
+	b.WriteString(fmt.Sprintf("Messages: %d total (%d user, %d assistant)\n", userMsgs+assistantMsgs, userMsgs, assistantMsgs))
+
+	// Token usage
+	b.WriteString(fmt.Sprintf("Input tokens: %d\n", m.sessionInputTokens))
+	b.WriteString(fmt.Sprintf("Output tokens: %d\n", m.sessionOutputTokens))
+	if m.sessionCacheCreationTokens > 0 || m.sessionCacheReadTokens > 0 {
+		b.WriteString(fmt.Sprintf("Cache tokens: %d created, %d read\n", m.sessionCacheCreationTokens, m.sessionCacheReadTokens))
+	}
+
+	// Cost
+	b.WriteString(fmt.Sprintf("Cost: $%.4f\n", m.sessionCost))
+
+	// Provider + model
+	variant := m.modelVariant
+	if variant == "" {
+		variant = "default"
+	}
+	modelName := llm.GetDefaultModel(m.defaultProvider)
+	if v, ok := llm.GetModelVariants()[m.defaultProvider]; ok {
+		if mn, ok := v[variant]; ok {
+			modelName = mn
+		}
+	}
+	b.WriteString(fmt.Sprintf("Provider: @%s (%s)\n", m.defaultProvider, modelName))
+
+	// Tool calls
+	if toolCalls > 0 {
+		b.WriteString(fmt.Sprintf("Tool calls: %d\n", toolCalls))
+	}
+
+	// Session duration
+	duration := time.Since(m.sessionStartTime).Truncate(time.Second)
+	b.WriteString(fmt.Sprintf("Session duration: %s\n", duration))
+
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: b.String(),
+	})
+	m.updateViewport()
+	m.status = fmt.Sprintf("Stats: %d msgs, %d tokens, $%.4f", userMsgs+assistantMsgs, m.sessionInputTokens+m.sessionOutputTokens, m.sessionCost)
 }

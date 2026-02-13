@@ -11,6 +11,7 @@ import (
 	"github.com/pedromelo/poly/internal/cli"
 	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/llm"
+	"github.com/pedromelo/poly/internal/mcp"
 	"github.com/pedromelo/poly/internal/sandbox"
 	"github.com/pedromelo/poly/internal/shell"
 	"github.com/pedromelo/poly/internal/theme"
@@ -57,6 +58,12 @@ func main() {
 
 	// Initialize sub-provider for delegate_task tool (lazy - resolves at call time)
 	llm.InitSubProvider()
+
+	// Initialize MCP servers (connects to configured servers, registers their tools)
+	mcp.Init()
+	if mcp.Global != nil {
+		defer mcp.Global.Close()
+	}
 
 	// Determine print prompt (--print takes priority over -p)
 	printPrompt := *printMode

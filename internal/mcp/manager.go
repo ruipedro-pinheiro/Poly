@@ -2,10 +2,15 @@ package mcp
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/tools"
 )
+
+// Global is the package-level MCP manager instance
+var Global *Manager
 
 // Manager manages multiple MCP server connections
 type Manager struct {
@@ -17,6 +22,44 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		clients: make(map[string]*Client),
+	}
+}
+
+// Init creates the global manager and connects all configured MCP servers.
+// Errors are logged but non-fatal (MCP is optional).
+func Init() {
+	Global = NewManager()
+
+	servers := config.GetMCPServers()
+	if len(servers) == 0 {
+		return
+	}
+
+	var configs []ServerConfig
+	for name, srv := range servers {
+		t := srv.Type
+		if t == "" {
+			t = "stdio"
+		}
+		configs = append(configs, ServerConfig{
+			Name:    name,
+			Type:    t,
+			Command: srv.Command,
+			Args:    srv.Args,
+			URL:     srv.URL,
+		})
+	}
+
+	for _, cfg := range configs {
+		if err := Global.Connect(cfg); err != nil {
+			log.Printf("[MCP] Failed to connect %s: %v", cfg.Name, err)
+		} else {
+			toolCount := 0
+			if c, ok := Global.GetClient(cfg.Name); ok {
+				toolCount = len(c.Tools())
+			}
+			log.Printf("[MCP] Connected: %s (%d tools)", cfg.Name, toolCount)
+		}
 	}
 }
 
