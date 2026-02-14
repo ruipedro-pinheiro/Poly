@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -536,6 +537,20 @@ func initCommands() *CommandRegistry {
 	})
 
 	r.Register(&Command{
+		Name:        "costs",
+		Category:    "Session",
+		Description: "Export session costs to CSV or JSON",
+		Usage:       "/costs [csv|json]",
+		Handler: func(m *Model, args []string) {
+			format := "csv"
+			if len(args) > 0 && args[0] == "json" {
+				format = "json"
+			}
+			m.handleCostsExport(format)
+		},
+	})
+
+	r.Register(&Command{
 		Name:        "memory",
 		Category:    "Session",
 		Description: "Show or clear MEMORY.md",
@@ -795,11 +810,13 @@ func (m *Model) handleUndo() {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
 		sessionMsgs[i] = session.Message{
-			Role:     msg.Role,
-			Content:  msg.Content,
-			Provider: msg.Provider,
-			Thinking: msg.Thinking,
-			Images:   msg.Images,
+			Role:         msg.Role,
+			Content:      msg.Content,
+			Provider:     msg.Provider,
+			Thinking:     msg.Thinking,
+			Images:       msg.Images,
+			InputTokens:  msg.InputTokens,
+			OutputTokens: msg.OutputTokens,
 		}
 	}
 	session.SetMessages(sessionMsgs)
@@ -841,11 +858,13 @@ func (m *Model) handleRewind(args []string) {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
 		sessionMsgs[i] = session.Message{
-			Role:     msg.Role,
-			Content:  msg.Content,
-			Provider: msg.Provider,
-			Thinking: msg.Thinking,
-			Images:   msg.Images,
+			Role:         msg.Role,
+			Content:      msg.Content,
+			Provider:     msg.Provider,
+			Thinking:     msg.Thinking,
+			Images:       msg.Images,
+			InputTokens:  msg.InputTokens,
+			OutputTokens: msg.OutputTokens,
 		}
 	}
 	session.SetMessages(sessionMsgs)
@@ -884,11 +903,13 @@ func (m *Model) handleRetry() {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
 		sessionMsgs[i] = session.Message{
-			Role:     msg.Role,
-			Content:  msg.Content,
-			Provider: msg.Provider,
-			Thinking: msg.Thinking,
-			Images:   msg.Images,
+			Role:         msg.Role,
+			Content:      msg.Content,
+			Provider:     msg.Provider,
+			Thinking:     msg.Thinking,
+			Images:       msg.Images,
+			InputTokens:  msg.InputTokens,
+			OutputTokens: msg.OutputTokens,
 		}
 	}
 	session.SetMessages(sessionMsgs)
@@ -1155,4 +1176,64 @@ func (m *Model) handleStatsCommand() {
 	})
 	m.updateViewport()
 	m.status = fmt.Sprintf("Stats: %d msgs, %d tokens, $%.4f", userMsgs+assistantMsgs, m.sessionInputTokens+m.sessionOutputTokens, m.sessionCost)
+}
+
+// handleCostsExport exports per-message cost data to CSV or JSON
+func (m *Model) handleCostsExport(format string) {
+	type costEntry struct {
+		Index        int     `json:"index"`
+		Provider     string  `json:"provider"`
+		InputTokens  int     `json:"input_tokens"`
+		OutputTokens int     `json:"output_tokens"`
+		Cost         float64 `json:"cost"`
+	}
+
+	var entries []costEntry
+	for i, msg := range m.messages {
+		if msg.Role != "assistant" || (msg.InputTokens == 0 && msg.OutputTokens == 0) {
+			continue
+		}
+		cost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider)
+		entries = append(entries, costEntry{
+			Index:        i,
+			Provider:     msg.Provider,
+			InputTokens:  msg.InputTokens,
+			OutputTokens: msg.OutputTokens,
+			Cost:         cost,
+		})
+	}
+
+	if len(entries) == 0 {
+		m.status = "No cost data to export"
+		return
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	timestamp := time.Now().Format("20060102-150405")
+
+	if format == "json" {
+		path := filepath.Join(homeDir, "poly-costs-"+timestamp+".json")
+		data, err := json.MarshalIndent(entries, "", "  ")
+		if err != nil {
+			m.status = "Export failed: " + err.Error()
+			return
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			m.status = "Export failed: " + err.Error()
+			return
+		}
+		m.status = "Costs exported to " + path
+	} else {
+		path := filepath.Join(homeDir, "poly-costs-"+timestamp+".csv")
+		var b strings.Builder
+		b.WriteString("index,provider,input_tokens,output_tokens,cost\n")
+		for _, e := range entries {
+			b.WriteString(fmt.Sprintf("%d,%s,%d,%d,%.6f\n", e.Index, e.Provider, e.InputTokens, e.OutputTokens, e.Cost))
+		}
+		if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+			m.status = "Export failed: " + err.Error()
+			return
+		}
+		m.status = "Costs exported to " + path
+	}
 }

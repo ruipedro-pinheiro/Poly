@@ -140,6 +140,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Forward non-key messages to the add provider form (cursor blink, etc.)
+	if m.state == viewAddProvider && m.addProviderForm != nil {
+		cmd := m.addProviderForm.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+	}
+
 	// Default: forward to textarea/viewport in chat mode
 	if m.state == viewChat {
 		var cmd tea.Cmd

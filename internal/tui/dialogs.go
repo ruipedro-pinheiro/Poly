@@ -336,86 +336,8 @@ func (m Model) renderControlRoom() string {
 }
 
 func (m Model) renderAddProvider() string {
-	w := dialogWidth(46, m.width, 36)
-
-	var content strings.Builder
-
-	fields := []struct {
-		label       string
-		placeholder string
-	}{
-		{"ID", "mistral, ollama, groq..."},
-		{"URL", "https://api.mistral.ai/v1"},
-		{"API Key", "sk-xxx (empty for local)"},
-		{"Model", "mistral-large, llama3..."},
+	if m.addProviderForm == nil {
+		return m.renderDialogFrame("+ Add Provider", "Loading...", 46)
 	}
-
-	for i, field := range fields {
-		isSelected := i == m.addProviderField
-
-		labelStyle := lipgloss.NewStyle().Foreground(theme.Overlay1).Width(10)
-		if isSelected {
-			labelStyle = labelStyle.Foreground(theme.Mauve).Bold(true)
-		}
-		content.WriteString(labelStyle.Render(field.label + ":"))
-
-		value := ""
-		if i < len(m.addProviderValues) {
-			value = m.addProviderValues[i]
-		}
-
-		inputStyle := lipgloss.NewStyle().
-			Foreground(theme.Text).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(theme.Surface2).
-			Padding(0, 1).
-			Width(w - 16)
-
-		if isSelected {
-			inputStyle = inputStyle.BorderForeground(theme.Mauve)
-		}
-
-		displayValue := value
-		if displayValue == "" {
-			displayValue = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render(field.placeholder)
-		} else if i == 2 && len(displayValue) > 4 {
-			displayValue = displayValue[:2] + strings.Repeat("*", len(displayValue)-4) + displayValue[len(displayValue)-2:]
-		}
-
-		if isSelected {
-			displayValue += "_"
-		}
-
-		content.WriteString(inputStyle.Render(displayValue) + "\n")
-	}
-
-	// Format selector
-	content.WriteString("\n")
-	isFormatSelected := m.addProviderField == 4
-	formatLabel := lipgloss.NewStyle().Foreground(theme.Overlay1).Width(10)
-	if isFormatSelected {
-		formatLabel = formatLabel.Foreground(theme.Mauve).Bold(true)
-	}
-	content.WriteString(formatLabel.Render("Format:"))
-
-	formats := []string{"OpenAI", "Anthropic", "Google"}
-	for i, f := range formats {
-		style := lipgloss.NewStyle().Foreground(theme.Overlay0).Padding(0, 1)
-		if i == m.addProviderFormat {
-			style = style.Background(theme.Mauve).Foreground(theme.Base).Bold(true)
-		}
-		content.WriteString(style.Render(f))
-	}
-	content.WriteString("\n")
-
-	// Hints
-	content.WriteString("\n")
-	hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-	content.WriteString(hintKey.Render("Tab") + hintDesc.Render(" next · "))
-	content.WriteString(hintKey.Render("◁▷") + hintDesc.Render(" format · "))
-	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" save · "))
-	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
-
-	return m.renderDialogFrame("+ Add Provider", content.String(), 46)
+	return m.renderDialogFrame("+ Add Provider", m.addProviderForm.View(), 46)
 }

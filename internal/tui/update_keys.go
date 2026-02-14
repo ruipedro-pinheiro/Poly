@@ -12,8 +12,6 @@ import (
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/tui/components/status"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 // handleKeyMsg dispatches keyboard input to the appropriate view handler
@@ -247,10 +245,9 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
 		if msg.String() == "n" || msg.String() == "N" {
 			m.state = viewAddProvider
-			m.addProviderField = 0
-			m.addProviderValues = []string{"", "", "", ""}
-			m.addProviderFormat = 0
-			return m, nil
+			f := newAddProviderForm(dialogWidth(46, m.width, 36))
+			m.addProviderForm = &f
+			return m, m.addProviderForm.Init()
 		}
 	}
 
@@ -580,61 +577,60 @@ func (m Model) handleControlRoomEnter() (tea.Model, tea.Cmd) {
 
 // handleAddProviderKey handles key presses in the add provider form
 func (m Model) handleAddProviderKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.addProviderForm == nil {
+		m.state = viewControlRoom
+		return m, nil
+	}
+
 	keyStr := msg.String()
 	switch keyStr {
-	case "tab", "down":
-		m.addProviderField = (m.addProviderField + 1) % 5
-		return m, nil
-	case "shift+tab", "up":
-		m.addProviderField = (m.addProviderField + 4) % 5
-		return m, nil
-	case "left":
-		if m.addProviderField == 4 {
-			m.addProviderFormat = (m.addProviderFormat + 2) % 3
-		}
-		return m, nil
-	case "right":
-		if m.addProviderField == 4 {
-			m.addProviderFormat = (m.addProviderFormat + 1) % 3
-		}
-		return m, nil
-	case "enter":
-		if m.addProviderValues[0] != "" && m.addProviderValues[1] != "" && m.addProviderValues[3] != "" {
-			formats := []string{"openai", "anthropic", "google"}
-			apiKey := m.addProviderValues[2]
-			cfg := llm.CustomProviderConfig{
-				ID:        m.addProviderValues[0],
-				Name:      cases.Title(language.English).String(m.addProviderValues[0]),
-				BaseURL:   m.addProviderValues[1],
-				APIKey:    apiKey,
-				Model:     m.addProviderValues[3],
-				Format:    formats[m.addProviderFormat],
-				MaxTokens: 4096,
-				Color:     "#888888",
-			}
-			if err := llm.SaveCustomProvider(cfg); err != nil {
-				m.status = "Error: " + err.Error()
-			} else {
-				m.providers = llm.GetAllProviders()
-				m.controlRoomProviders = llm.GetProviderNames()
-				m.status = "Added @" + m.addProviderValues[0]
-			}
-		}
-		m.state = viewControlRoom
-		return m, nil
 	case "esc":
+		m.addProviderForm = nil
 		m.state = viewControlRoom
 		return m, nil
-	case "backspace":
-		if m.addProviderField < 4 && len(m.addProviderValues[m.addProviderField]) > 0 {
-			m.addProviderValues[m.addProviderField] = m.addProviderValues[m.addProviderField][:len(m.addProviderValues[m.addProviderField])-1]
+
+	case "tab", "down":
+		cmd := m.addProviderForm.NextField()
+		return m, cmd
+
+	case "shift+tab", "up":
+		cmd := m.addProviderForm.PrevField()
+		return m, cmd
+
+	case "left", "h":
+		if m.addProviderForm.focusIndex == apFieldFormat {
+			m.addProviderForm.CycleFormat(-1)
+			return m, nil
 		}
+		// Fall through to forward to textinput
+		cmd := m.addProviderForm.Update(msg)
+		return m, cmd
+
+	case "right", "l":
+		if m.addProviderForm.focusIndex == apFieldFormat {
+			m.addProviderForm.CycleFormat(1)
+			return m, nil
+		}
+		cmd := m.addProviderForm.Update(msg)
+		return m, cmd
+
+	case "enter":
+		err := m.addProviderForm.SaveProvider()
+		if err != nil {
+			m.status = "Error: " + err.Error()
+		} else if m.addProviderForm.Completed() {
+			m.providers = llm.GetAllProviders()
+			m.controlRoomProviders = llm.GetProviderNames()
+			m.status = "Added @" + m.addProviderForm.ProviderID()
+		}
+		m.addProviderForm = nil
+		m.state = viewControlRoom
 		return m, nil
+
 	default:
-		if m.addProviderField < 4 && len(keyStr) == 1 {
-			m.addProviderValues[m.addProviderField] += keyStr
-		}
-		return m, nil
+		// Forward to the focused textinput
+		cmd := m.addProviderForm.Update(msg)
+		return m, cmd
 	}
 }
 

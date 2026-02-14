@@ -46,6 +46,10 @@ func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
 			// Track tokens
 			m.updateTokenStats(msg)
 
+			// Track per-message tokens
+			m.messages[lastIdx].InputTokens = msg.InputTokens
+			m.messages[lastIdx].OutputTokens = msg.OutputTokens
+
 			// Show response time + streaming stats
 			if !m.streamStartTime.IsZero() {
 				elapsed := time.Since(m.streamStartTime)
@@ -178,6 +182,9 @@ func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, te
 
 	if msg.Done {
 		m.tableRonde.activeProviders[msg.Provider] = false
+		// Track per-message tokens
+		m.messages[idx].InputTokens = msg.InputTokens
+		m.messages[idx].OutputTokens = msg.OutputTokens
 		m.saveMessageAt(idx)
 		m.updateViewport()
 		return m, m.checkRoundComplete()
@@ -337,9 +344,11 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
 		sessionMsgs[i] = session.Message{
-			Role:     msg.Role,
-			Content:  msg.Content,
-			Provider: msg.Provider,
+			Role:         msg.Role,
+			Content:      msg.Content,
+			Provider:     msg.Provider,
+			InputTokens:  msg.InputTokens,
+			OutputTokens: msg.OutputTokens,
 		}
 	}
 	session.SetMessages(sessionMsgs)

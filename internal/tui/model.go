@@ -67,9 +67,7 @@ type Model struct {
 	tableRonde *tableRondeState
 
 	// Add Provider form state
-	addProviderField  int      // 0=id, 1=url, 2=apikey, 3=model, 4=format
-	addProviderValues []string // [id, url, apikey, model]
-	addProviderFormat int      // 0=openai, 1=anthropic, 2=google
+	addProviderForm *addProviderForm
 
 	// Pending image attachments for next message
 	pendingImages     [][]byte

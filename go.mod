@@ -6,6 +6,11 @@ require (
 	charm.land/bubbles/v2 v2.0.0-rc.1.0.20260109112849-ae99f46cec66
 	charm.land/bubbletea/v2 v2.0.0-rc.2.0.20251216153312-819e2e89c62e
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251205162909-7869489d8971
+	github.com/charmbracelet/glamour v0.10.0
+	github.com/chzyer/readline v1.5.1
+	github.com/lucasb-eyer/go-colorful v1.3.0
+	golang.org/x/term v0.31.0
+	golang.org/x/text v0.24.0
 )
 
 require (
@@ -14,7 +19,6 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
-	github.com/charmbracelet/glamour v0.10.0 // indirect
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20251212194010-b927aa605560 // indirect
 	github.com/charmbracelet/x/ansi v0.11.5 // indirect
@@ -23,13 +27,11 @@ require (
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
-	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/clipperhouse/displaywidth v0.9.0 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
-	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
@@ -43,6 +45,4 @@ require (
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/term v0.31.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
 )

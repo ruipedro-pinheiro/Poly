@@ -519,7 +519,12 @@ func readTableRondeEvent(provider string, round int) tea.Cmd {
 				Round:      round,
 			}
 		case "done":
-			return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
+			msg := TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
+			if event.Response != nil {
+				msg.InputTokens = event.Response.InputTokens
+				msg.OutputTokens = event.Response.OutputTokens
+			}
+			return msg
 		case "error":
 			return TableRondeStreamMsg{Error: event.Error, Provider: provider, Round: round}
 		}

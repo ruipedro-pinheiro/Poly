@@ -35,15 +35,17 @@ type ContentBlock struct {
 
 // Message represents a chat message
 type Message struct {
-	Role       string   // "user" or provider name
-	Content    string   // full text (for persistence)
-	Provider   string   // which provider responded
-	Thinking   string   // thinking content (for extended thinking models)
-	Images     []string // file paths for persisted images
-	ImageData  [][]byte // raw image data (for pasted images, not persisted)
-	ImageTypes []string // media types for ImageData
-	ToolCalls  []ToolCallData  // structured tool call data
-	Blocks     []ContentBlock  // ordered interleaved content (text + tools)
+	Role         string   // "user" or provider name
+	Content      string   // full text (for persistence)
+	Provider     string   // which provider responded
+	Thinking     string   // thinking content (for extended thinking models)
+	Images       []string // file paths for persisted images
+	ImageData    [][]byte // raw image data (for pasted images, not persisted)
+	ImageTypes   []string // media types for ImageData
+	ToolCalls    []ToolCallData  // structured tool call data
+	Blocks       []ContentBlock  // ordered interleaved content (text + tools)
+	InputTokens  int      // tokens consumed by this message
+	OutputTokens int      // tokens generated for this message
 }
 
 // modelOption represents a selectable model in the picker
@@ -70,14 +72,16 @@ type StreamMsg struct {
 
 // TableRondeStreamMsg is sent during @all Table Ronde streaming
 type TableRondeStreamMsg struct {
-	Provider   string
-	Content    string
-	Thinking   string
-	Done       bool
-	Error      error
-	Round      int             // current round number (1-based)
-	ToolCall   *llm.ToolCall   // tool_use event
-	ToolResult *llm.ToolResult // tool_result event
+	Provider     string
+	Content      string
+	Thinking     string
+	Done         bool
+	Error        error
+	Round        int             // current round number (1-based)
+	ToolCall     *llm.ToolCall   // tool_use event
+	ToolResult   *llm.ToolResult // tool_result event
+	InputTokens  int
+	OutputTokens int
 }
 
 // tableRondeState tracks @all Table Ronde orchestration state

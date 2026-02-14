@@ -389,6 +389,21 @@ func (m Model) renderAssistantMessage(msg Message, index int, availWidth int, is
 		}
 	}
 
+	// Per-message token/cost annotation (subtle, at the bottom)
+	if msg.InputTokens > 0 || msg.OutputTokens > 0 {
+		tokenInfo := fmt.Sprintf("%s/%s tokens",
+			formatTokenCount(msg.InputTokens),
+			formatTokenCount(msg.OutputTokens))
+		if cost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider); cost > 0 {
+			tokenInfo += fmt.Sprintf(" · $%.4f", cost)
+		}
+		tokenLine := lipgloss.NewStyle().
+			Foreground(theme.Overlay0).
+			Italic(true).
+			Render(tokenInfo)
+		parts = append(parts, tokenLine)
+	}
+
 	body := strings.Join(parts, "\n")
 
 	// Thick left bar in provider color - clean and simple
@@ -538,11 +553,13 @@ func (m *Model) addMessage(msg Message) {
 	m.messages = append(m.messages, msg)
 	// Persist to session
 	session.AddMessage(session.Message{
-		Role:     msg.Role,
-		Content:  msg.Content,
-		Provider: msg.Provider,
-		Thinking: msg.Thinking,
-		Images:   msg.Images,
+		Role:         msg.Role,
+		Content:      msg.Content,
+		Provider:     msg.Provider,
+		Thinking:     msg.Thinking,
+		Images:       msg.Images,
+		InputTokens:  msg.InputTokens,
+		OutputTokens: msg.OutputTokens,
 	})
 }
 
@@ -554,6 +571,14 @@ func (m *Model) saveLastMessage() {
 	m.saveMessageAt(len(m.messages) - 1)
 }
 
+// formatTokenCount formats a token count for display (e.g. 1234 -> "1.2k")
+func formatTokenCount(n int) string {
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
 // saveMessageAt persists a specific message by index
 func (m *Model) saveMessageAt(idx int) {
 	if idx < 0 || idx >= len(m.messages) {
@@ -561,10 +586,12 @@ func (m *Model) saveMessageAt(idx int) {
 	}
 	msg := m.messages[idx]
 	session.AddMessage(session.Message{
-		Role:     msg.Role,
-		Content:  msg.Content,
-		Provider: msg.Provider,
-		Thinking: msg.Thinking,
-		Images:   msg.Images,
+		Role:         msg.Role,
+		Content:      msg.Content,
+		Provider:     msg.Provider,
+		Thinking:     msg.Thinking,
+		Images:       msg.Images,
+		InputTokens:  msg.InputTokens,
+		OutputTokens: msg.OutputTokens,
 	})
 }

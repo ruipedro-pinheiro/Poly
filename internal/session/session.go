@@ -11,12 +11,14 @@ import (
 
 // Message represents a persisted chat message
 type Message struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Provider  string    `json:"provider,omitempty"`
-	Thinking  string    `json:"thinking,omitempty"`
-	Images    []string  `json:"images,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	Role         string    `json:"role"`
+	Content      string    `json:"content"`
+	Provider     string    `json:"provider,omitempty"`
+	Thinking     string    `json:"thinking,omitempty"`
+	Images       []string  `json:"images,omitempty"`
+	InputTokens  int       `json:"input_tokens,omitempty"`
+	OutputTokens int       `json:"output_tokens,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // Session represents a chat session

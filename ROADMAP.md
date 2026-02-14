@@ -1,6 +1,6 @@
 # Poly-Go — Roadmap
 
-> Dernière mise à jour : 13 février 2026 (v0.3.3)
+> Dernière mise à jour : 14 février 2026 (v0.4.0)
 > Basée sur le [Cahier des Charges](./CAHIER_DES_CHARGES.md) et les [Personas/Use Cases](./docs/ux/02-personas-use-cases.md)
 
 ---
@@ -130,19 +130,16 @@
 
 > Objectif : Renforcer le différenciateur unique de Poly
 
-### Table Ronde — Conversation inter-IAs (P0)
+### Table Ronde — Conversation inter-IAs (P0) ✅
 
-L'orchestrateur `@all` actuel est basique (séquentiel, le 1er répond, les autres "reviewent").
-La v2 transforme la cascade en **vraie conversation** : les IAs se parlent, s'interpellent, et débattent.
-
-- [ ] **Inter-mentions dynamiques** : tout provider peut `@mentionner` n'importe quel autre provider configuré dans sa réponse
-- [ ] **Détection des @mentions** dans les réponses IA → déclenche une réponse du provider mentionné
-- [ ] **Contexte partagé** : chaque provider reçoit toute la conversation (y compris les réponses des autres)
-- [ ] **Max turns** : limite configurable (défaut 3-5) pour éviter le ping-pong infini
-- [ ] **Esc coupe tout** : l'user peut stopper la table ronde à tout moment
-- [ ] **System prompt enrichi** : chaque IA sait quels providers sont dans le chat et peut les mentionner
-- [ ] **Affichage clair** : qui parle, en réponse à qui (bordure couleur provider)
-- [ ] Cascade @all UX : fix lag et affichage confus *(reporté de v0.3.1)*
+- [x] **Inter-mentions dynamiques** : tout provider peut `@mentionner` n'importe quel autre provider configuré
+- [x] **Détection des @mentions** dans les réponses IA → déclenche une réponse du provider mentionné
+- [x] **Contexte partagé** : chaque provider reçoit toute la conversation (y compris les réponses des autres)
+- [x] **Max turns** : limite configurable `/rounds [N]` (défaut 5, max 20)
+- [x] **Esc coupe tout** : l'user peut stopper la table ronde à tout moment
+- [x] **System prompt enrichi** : role "participant", chaque IA sait quels providers sont dans le chat
+- [x] **Affichage clair** : bordure couleur provider (existant), messages système par round
+- [x] Ancien code cascade supprimé (CascadePhase, CascadeStreamMsg, cascadeState)
 
 ### Add Provider Rework (P1)
 
@@ -165,6 +162,16 @@ La v2 transforme la cascade en **vraie conversation** : les IAs se parlent, s'in
 ## v0.5.0 — Qualité (Mai - Juin 2026)
 
 > Objectif : Produit solide avant la release
+
+### Docker & Portabilité (P0)
+
+- [ ] `Dockerfile` multi-stage : build avec Go 1.25.6, binaire statique final
+- [ ] Sandbox Docker activé par défaut (les tools LLM s'exécutent dans un conteneur)
+- [ ] Volumes/bind mounts : permettre read/write en dehors du dossier Poly (projets, fichiers user)
+- [ ] Zéro dépendance sur l'hôte : fonctionne sur les Macs 42 (Ubuntu) sans setup-42.sh
+- [ ] `docker run` one-liner pour lancer Poly sans installation
+
+### Tests & Performance (P0)
 
 - [ ] 60%+ coverage globale
 - [ ] Coverage TUI : tests pour les interactions clavier principales
@@ -243,7 +250,7 @@ La v2 transforme la cascade en **vraie conversation** : les IAs se parlent, s'in
 
 ## Métriques de Succès
 
-### v0.3.x ✅ (actuel — v0.3.3)
+### v0.3.x ✅
 
 | Métrique | v0.2.x | v0.3.3 |
 |----------|--------|--------|
@@ -254,15 +261,23 @@ La v2 transforme la cascade en **vraie conversation** : les IAs se parlent, s'in
 | Navigation 100% clavier | Non | Oui |
 | CI/CD | Non | GitHub Actions (build + vet + test -race) |
 | Vulnérabilités connues | 2 (apply_diff, git path) | 0 |
-| Header tokens/context% | Jamais affiché | Fonctionnel |
-| InfoPanel MCP/Sandbox | Jamais affiché | Fonctionnel |
+
+### v0.4.0 (actuel — Table Ronde)
+
+| Métrique | v0.3.3 | v0.4.0 |
+|----------|--------|--------|
+| @all orchestration | 2-phase rigide (cascade) | Multi-round Table Ronde |
+| Inter-IA @mentions | Non | Oui (case-insensitive, dedup) |
+| Contexte partagé | Tronqué pour reviewers | Full context tous rounds |
+| Max rounds configurable | Non | `/rounds [N]` (défaut 5) |
+| Tests Table Ronde | 0 | 7 (extractMentions + config + system) |
 
 ### v0.5.0
 
 | Métrique | Actuel | Cible |
 |----------|--------|-------|
 | Test coverage | ~15-25% | 60%+ |
-| Cascade @all UX | Bancal | Utilisable |
+| Docker portabilité | Non | Dockerfile + sandbox par défaut |
 | Stress test providers | Non testé | 20+ |
 
 ### v1.0.0
