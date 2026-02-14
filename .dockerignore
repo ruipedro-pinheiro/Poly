@@ -1,0 +1,35 @@
+# VCS
+.git
+.gitignore
+
+# Build artifacts
+poly
+coverage.out
+coverage.html
+tmp/
+
+# Documentation (not needed in image)
+*.md
+LICENSE
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# CI
+.github/
+
+# Misc
+scripts/
