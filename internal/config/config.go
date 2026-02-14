@@ -130,7 +130,7 @@ func Save() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func Save() error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(configDir, "config.json"), data, 0644)
+	return os.WriteFile(filepath.Join(configDir, "config.json"), data, 0600)
 }
 
 // GetProvider returns a provider's config

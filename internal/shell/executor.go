@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pedromelo/poly/internal/llm"
+	"github.com/pedromelo/poly/internal/security"
 )
 
 // executeAICommand executes an AI command
@@ -108,6 +109,12 @@ func (s *Shell) executeShellCommand(cmd *Command) error {
 	// Substitute variables
 	for i, part := range cmd.Parts {
 		cmd.Parts[i] = s.substituteVariables(part)
+	}
+
+	// Check for blocked patterns
+	fullCmd := strings.Join(cmd.Parts, " ")
+	if security.IsBlocked(fullCmd) {
+		return fmt.Errorf("blocked: dangerous command pattern detected")
 	}
 
 	// Create command

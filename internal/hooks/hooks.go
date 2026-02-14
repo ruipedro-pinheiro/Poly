@@ -3,11 +3,10 @@ package hooks
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 )
 
@@ -152,28 +151,28 @@ func executeHook(cmdTemplate string, data TemplateData) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		// Hooks are best-effort, don't propagate errors
-		_ = fmt.Sprintf("hook error: %v, stderr: %s", err, stderr.String())
-	}
+	_ = cmd.Run()
+	// Hooks are best-effort, don't propagate errors
 }
 
-// renderTemplate renders a Go template string with the given data
+// renderTemplate replaces placeholders in the command string with data values.
+// Uses simple string replacement instead of text/template to prevent injection.
 func renderTemplate(tmpl string, data TemplateData) (string, error) {
-	// Quick path: no template markers
+	// Quick path: no placeholders
 	if !strings.Contains(tmpl, "{{") {
 		return tmpl, nil
 	}
 
-	t, err := template.New("hook").Parse(tmpl)
-	if err != nil {
-		return "", err
-	}
+	result := tmpl
+	result = strings.ReplaceAll(result, "{{.ToolName}}", data.ToolName)
+	result = strings.ReplaceAll(result, "{{.Command}}", data.Command)
+	result = strings.ReplaceAll(result, "{{.ExitCode}}", strconv.Itoa(data.ExitCode))
+	result = strings.ReplaceAll(result, "{{.Output}}", data.Output)
+	// Also support spaces around dot: {{ .ToolName }}
+	result = strings.ReplaceAll(result, "{{ .ToolName }}", data.ToolName)
+	result = strings.ReplaceAll(result, "{{ .Command }}", data.Command)
+	result = strings.ReplaceAll(result, "{{ .ExitCode }}", strconv.Itoa(data.ExitCode))
+	result = strings.ReplaceAll(result, "{{ .Output }}", data.Output)
 
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
+	return result, nil
 }

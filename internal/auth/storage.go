@@ -42,7 +42,10 @@ func getStoragePath() string {
 	}
 
 	polyDir := filepath.Join(configDir, "poly")
-	os.MkdirAll(polyDir, 0755)
+	if err := os.MkdirAll(polyDir, 0700); err != nil {
+		// Best effort: continue with the path anyway, save will fail if dir doesn't exist
+		_ = err
+	}
 
 	storagePath = filepath.Join(polyDir, "auth.json")
 	return storagePath

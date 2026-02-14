@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/pedromelo/poly/internal/auth"
@@ -14,11 +15,41 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-// streamEventChan stores the current streaming channel
-var streamEventChan <-chan llm.StreamEvent
+// streamEventChan stores the current streaming channel (protected by streamMu)
+var (
+	streamEventChan <-chan llm.StreamEvent
+	streamMu        sync.Mutex
+)
 
-// tableRondeStreamChans stores channels for @all Table Ronde streaming
-var tableRondeStreamChans = make(map[string]<-chan llm.StreamEvent)
+// tableRondeStreamChans stores channels for @all Table Ronde streaming (protected by trChansMu)
+var (
+	tableRondeStreamChans   = make(map[string]<-chan llm.StreamEvent)
+	trChansMu               sync.RWMutex
+)
+
+// getStreamChan safely reads a channel from the Table Ronde map
+func getStreamChan(key string) (<-chan llm.StreamEvent, bool) {
+	trChansMu.RLock()
+	defer trChansMu.RUnlock()
+	ch, ok := tableRondeStreamChans[key]
+	return ch, ok
+}
+
+// setStreamChan safely writes a channel to the Table Ronde map
+func setStreamChan(key string, ch <-chan llm.StreamEvent) {
+	trChansMu.Lock()
+	defer trChansMu.Unlock()
+	tableRondeStreamChans[key] = ch
+}
+
+// clearStreamChans safely clears all Table Ronde channels
+func clearStreamChans() {
+	trChansMu.Lock()
+	defer trChansMu.Unlock()
+	for k := range tableRondeStreamChans {
+		delete(tableRondeStreamChans, k)
+	}
+}
 
 // getToolDefinitions converts tools to LLM format
 func getToolDefinitions() []llm.ToolDefinition {
@@ -166,7 +197,9 @@ func (m *Model) sendToProvider(providerName string, content string) tea.Cmd {
 	}
 
 	// Start streaming
+	streamMu.Lock()
 	streamEventChan = p.Stream(ctx, llmMessages, toolDefs, llm.StreamOptions{ThinkingMode: m.thinkingMode})
+	streamMu.Unlock()
 
 	// Return command to read first event
 	return readStreamEvent(providerName)
@@ -282,7 +315,7 @@ func (m *Model) sendTableRonde(content string) tea.Cmd {
 		}
 
 		providerMessages := filterMessagesForProvider(llmMessages, name)
-		tableRondeStreamChans[name] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode})
+		setStreamChan(name, p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode}))
 
 		n := name // capture
 		cmds = append(cmds, readTableRondeEvent(n, 1))
@@ -350,7 +383,7 @@ func (m *Model) startNextRound(mentions []pendingMention) tea.Cmd {
 		// Build full conversation history (ALL messages including previous rounds)
 		llmMessages := m.buildLLMMessages()
 		providerMessages := filterMessagesForProvider(llmMessages, name)
-		tableRondeStreamChans[name] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode})
+		setStreamChan(name, p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode}))
 
 		n := name // capture
 		cmds = append(cmds, readTableRondeEvent(n, round))
@@ -398,9 +431,7 @@ func (m *Model) finishTableRonde() {
 	m.isStreaming = false
 	m.tableRonde = nil
 	// Clean up stream channels
-	for k := range tableRondeStreamChans {
-		delete(tableRondeStreamChans, k)
-	}
+	clearStreamChans()
 }
 
 // buildLLMMessages converts chat history to LLM messages (excluding empty slots)
@@ -445,11 +476,15 @@ func filterMessagesForProvider(messages []llm.Message, providerName string) []ll
 // readStreamEvent reads the next event from the stream
 func readStreamEvent(provider string) tea.Cmd {
 	return func() tea.Msg {
-		if streamEventChan == nil {
+		streamMu.Lock()
+		ch := streamEventChan
+		streamMu.Unlock()
+
+		if ch == nil {
 			return StreamMsg{Done: true, Provider: provider}
 		}
 
-		event, ok := <-streamEventChan
+		event, ok := <-ch
 		if !ok {
 			return StreamMsg{Done: true, Provider: provider}
 		}
@@ -490,7 +525,7 @@ func readStreamEvent(provider string) tea.Cmd {
 // readTableRondeEvent reads from a specific provider's stream during Table Ronde
 func readTableRondeEvent(provider string, round int) tea.Cmd {
 	return func() tea.Msg {
-		ch, ok := tableRondeStreamChans[provider]
+		ch, ok := getStreamChan(provider)
 		if !ok || ch == nil {
 			return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
 		}

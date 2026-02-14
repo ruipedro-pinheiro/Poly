@@ -37,8 +37,10 @@ func GeneratePKCE() (*PKCE, error) {
 }
 
 // GenerateState generates a random state string for OAuth
-func GenerateState() string {
+func GenerateState() (string, error) {
 	stateBytes := make([]byte, 16)
-	rand.Read(stateBytes)
-	return base64.RawURLEncoding.EncodeToString(stateBytes)
+	if _, err := rand.Read(stateBytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(stateBytes), nil
 }

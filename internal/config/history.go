@@ -49,10 +49,10 @@ func AddHistory(entry string) {
 	}
 
 	// Ensure config dir exists
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0700)
 
 	// Append to file
-	f, err := os.OpenFile(historyPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(historyPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return
 	}
@@ -63,6 +63,6 @@ func AddHistory(entry string) {
 	if len(existing)+1 > maxHistoryEntries {
 		trimmed := append(existing, entry)
 		trimmed = trimmed[len(trimmed)-maxHistoryEntries:]
-		os.WriteFile(historyPath(), []byte(strings.Join(trimmed, "\n")+"\n"), 0644)
+		os.WriteFile(historyPath(), []byte(strings.Join(trimmed, "\n")+"\n"), 0600)
 	}
 }

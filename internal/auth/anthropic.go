@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pedromelo/poly/internal/config"
@@ -36,7 +37,10 @@ type pendingAuth struct {
 	State    string
 }
 
-var pendingOAuth *pendingAuth
+var (
+	pendingOAuth   *pendingAuth
+	pendingOAuthMu sync.Mutex
+)
 
 // StartAnthropicOAuth starts the OAuth flow and opens the browser
 // Returns the auth URL for display if browser can't be opened
@@ -51,10 +55,12 @@ func StartAnthropicOAuth(mode string) (string, error) {
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
 
+	pendingOAuthMu.Lock()
 	pendingOAuth = &pendingAuth{
 		Verifier: pkce.Verifier,
 		State:    state,
 	}
+	pendingOAuthMu.Unlock()
 
 	baseURL := AnthropicAuthURLMax
 	if mode == "console" {
@@ -83,7 +89,11 @@ func StartAnthropicOAuth(mode string) (string, error) {
 // ExchangeAnthropicCode exchanges the authorization code for tokens.
 // Accepts: full callback URL (?code=...&state=...), raw "CODE#STATE", or raw code.
 func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
-	if pendingOAuth == nil {
+	pendingOAuthMu.Lock()
+	pending := pendingOAuth
+	pendingOAuthMu.Unlock()
+
+	if pending == nil {
 		return nil, fmt.Errorf("no pending OAuth flow. Start OAuth first")
 	}
 
@@ -110,7 +120,7 @@ func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
 	} else {
 		// Raw code only
 		code = input
-		state = pendingOAuth.State
+		state = pending.State
 	}
 
 	if code == "" {
@@ -124,7 +134,7 @@ func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
 		"code":          {code},
 		"state":         {state},
 		"redirect_uri":  {AnthropicRedirectURI},
-		"code_verifier": {pendingOAuth.Verifier},
+		"code_verifier": {pending.Verifier},
 	}
 
 	req, err := http.NewRequest("POST", AnthropicTokenURL, strings.NewReader(form.Encode()))
@@ -156,7 +166,9 @@ func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
 	}
 
 	// Clear pending verifier and state
+	pendingOAuthMu.Lock()
 	pendingOAuth = nil
+	pendingOAuthMu.Unlock()
 
 	expiresIn := result.ExpiresIn
 	if expiresIn == 0 {
@@ -226,6 +238,8 @@ func RefreshAnthropicToken(refreshToken string) (*OAuthTokens, error) {
 
 // HasPendingAuth returns true if there's a pending OAuth flow
 func HasPendingAuth() bool {
+	pendingOAuthMu.Lock()
+	defer pendingOAuthMu.Unlock()
 	return pendingOAuth != nil
 }
 

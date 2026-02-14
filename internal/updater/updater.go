@@ -87,6 +87,6 @@ func saveCheckTimestamp() {
 		return
 	}
 	dir := filepath.Dir(path)
-	os.MkdirAll(dir, 0755)
-	os.WriteFile(path, []byte(time.Now().Format(time.RFC3339)), 0644)
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(path, []byte(time.Now().Format(time.RFC3339)), 0600)
 }

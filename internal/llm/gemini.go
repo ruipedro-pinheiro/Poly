@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	cryptoRand "crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pedromelo/poly/internal/auth"
@@ -24,7 +26,11 @@ const (
 	defaultAPIModel        = "gemini-2.5-flash"
 )
 
-var codeAssistProjectID string
+var (
+	codeAssistProjectID   string
+	codeAssistProjectOnce sync.Once
+	codeAssistProjectErr  error
+)
 
 func init() {
 	RegisterProvider(NewGeminiProvider(ProviderConfig{}))
@@ -774,61 +780,84 @@ func extractCodeAssistContent(payload map[string]interface{}) (string, string, [
 }
 
 func (p *GeminiProvider) resolveCodeAssistProjectID(token string) (string, error) {
-	if codeAssistProjectID != "" {
-		return codeAssistProjectID, nil
+	codeAssistProjectOnce.Do(func() {
+		envProject := os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if envProject == "" {
+			envProject = os.Getenv("GOOGLE_CLOUD_PROJECT_ID")
+		}
+		if envProject == "" {
+			envProject = os.Getenv("GCLOUD_PROJECT")
+		}
+
+		body := map[string]interface{}{
+			"cloudaicompanionProject": envProject,
+			"metadata": map[string]interface{}{
+				"ideType":     "IDE_UNSPECIFIED",
+				"platform":    "PLATFORM_UNSPECIFIED",
+				"pluginType":  "GEMINI",
+				"duetProject": envProject,
+			},
+		}
+
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			codeAssistProjectErr = fmt.Errorf("failed to marshal request: %w", err)
+			return
+		}
+		req, err := http.NewRequest("POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
+		if err != nil {
+			codeAssistProjectErr = fmt.Errorf("failed to create request: %w", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			codeAssistProjectErr = err
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			codeAssistProjectErr = fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, string(bodyBytes))
+			return
+		}
+
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			codeAssistProjectErr = fmt.Errorf("failed to decode response: %w", err)
+			return
+		}
+
+		if project, ok := result["cloudaicompanionProject"].(string); ok && project != "" {
+			codeAssistProjectID = project
+			return
+		}
+
+		if envProject != "" {
+			codeAssistProjectID = envProject
+			return
+		}
+
+		codeAssistProjectErr = errors.New("Code Assist requires GOOGLE_CLOUD_PROJECT environment variable")
+	})
+
+	if codeAssistProjectErr != nil {
+		return "", codeAssistProjectErr
 	}
-
-	envProject := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if envProject == "" {
-		envProject = os.Getenv("GOOGLE_CLOUD_PROJECT_ID")
-	}
-	if envProject == "" {
-		envProject = os.Getenv("GCLOUD_PROJECT")
-	}
-
-	body := map[string]interface{}{
-		"cloudaicompanionProject": envProject,
-		"metadata": map[string]interface{}{
-			"ideType":     "IDE_UNSPECIFIED",
-			"platform":    "PLATFORM_UNSPECIFIED",
-			"pluginType":  "GEMINI",
-			"duetProject": envProject,
-		},
-	}
-
-	jsonBody, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if project, ok := result["cloudaicompanionProject"].(string); ok && project != "" {
-		codeAssistProjectID = project
-		return project, nil
-	}
-
-	if envProject != "" {
-		codeAssistProjectID = envProject
-		return envProject, nil
-	}
-
-	return "", errors.New("Code Assist requires GOOGLE_CLOUD_PROJECT environment variable")
+	return codeAssistProjectID, nil
 }
 
 func generateUUID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	b := make([]byte, 16)
+	if _, err := cryptoRand.Read(b); err != nil {
+		// Fallback to timestamp if crypto/rand fails (should never happen)
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 2
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

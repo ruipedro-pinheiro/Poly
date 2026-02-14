@@ -792,7 +792,7 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 	}
 
 	// Save
-	if err := os.MkdirAll(filepath.Dir(customProvidersFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(customProvidersFile), 0700); err != nil {
 		return err
 	}
 
@@ -801,7 +801,7 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 		return err
 	}
 
-	if err := os.WriteFile(customProvidersFile, data, 0644); err != nil {
+	if err := os.WriteFile(customProvidersFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -836,7 +836,7 @@ func DeleteCustomProvider(id string) error {
 		return err
 	}
 
-	return os.WriteFile(customProvidersFile, data, 0644)
+	return os.WriteFile(customProvidersFile, data, 0600)
 }
 
 // GetCustomProviders returns all custom provider configs

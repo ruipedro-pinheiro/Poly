@@ -7,23 +7,35 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
 
 // Google OAuth config (from Gemini CLI, public credentials)
 const (
-	GoogleClientID     = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-	GoogleClientSecret = "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"
-	GoogleAuthorizeURL = "https://accounts.google.com/o/oauth2/v2/auth"
-	GoogleTokenURL     = "https://oauth2.googleapis.com/token"
-	GoogleCallbackPort = 8086
+	GoogleClientID           = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+	googleClientSecretDefault = "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"
+	GoogleAuthorizeURL       = "https://accounts.google.com/o/oauth2/v2/auth"
+	GoogleTokenURL           = "https://oauth2.googleapis.com/token"
+	GoogleCallbackPort       = 8086
 )
+
+// GoogleClientSecret returns the OAuth client secret, preferring env var over default.
+func GoogleClientSecret() string {
+	if secret := os.Getenv("GOOGLE_CLIENT_SECRET"); secret != "" {
+		return secret
+	}
+	return googleClientSecretDefault
+}
 
 // StartGoogleOAuth starts the OAuth flow for Google/Gemini
 func StartGoogleOAuth() (string, error) {
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", GoogleCallbackPort)
-	state := GenerateState()
+	state, err := GenerateState()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
+	}
 
 	params := url.Values{
 		"client_id":     {GoogleClientID},
@@ -44,7 +56,10 @@ func StartGoogleOAuth() (string, error) {
 // StartGoogleOAuthWithCallback starts OAuth and waits for callback
 func StartGoogleOAuthWithCallback() (*OAuthTokens, error) {
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", GoogleCallbackPort)
-	state := GenerateState()
+	state, err := GenerateState()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate state: %w", err)
+	}
 
 	params := url.Values{
 		"client_id":     {GoogleClientID},
@@ -129,7 +144,7 @@ func exchangeGoogleCode(code, redirectURI string) (*OAuthTokens, error) {
 	data := url.Values{
 		"code":          {code},
 		"client_id":     {GoogleClientID},
-		"client_secret": {GoogleClientSecret},
+		"client_secret": {GoogleClientSecret()},
 		"redirect_uri":  {redirectURI},
 		"grant_type":    {"authorization_code"},
 	}
@@ -179,7 +194,7 @@ func exchangeGoogleCode(code, redirectURI string) (*OAuthTokens, error) {
 func RefreshGoogleToken(refreshToken string) (*OAuthTokens, error) {
 	data := url.Values{
 		"client_id":     {GoogleClientID},
-		"client_secret": {GoogleClientSecret},
+		"client_secret": {GoogleClientSecret()},
 		"refresh_token": {refreshToken},
 		"grant_type":    {"refresh_token"},
 	}

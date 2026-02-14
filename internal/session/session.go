@@ -1,6 +1,8 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -69,7 +71,7 @@ func GetSessionDir() string {
 
 // Load loads the current session from disk (auto-migrates old format)
 func Load() (*Session, error) {
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		return nil, err
 	}
 
@@ -294,7 +296,11 @@ func newBlankSession() *Session {
 }
 
 func generateID() string {
-	return time.Now().Format("20060102-150405")
+	suffix := make([]byte, 4)
+	if _, err := rand.Read(suffix); err != nil {
+		return time.Now().Format("20060102-150405")
+	}
+	return time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(suffix)
 }
 
 func loadIndex() error {
@@ -320,7 +326,7 @@ func saveIndex() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(sessionDir, "index.json"), data, 0644)
+	return os.WriteFile(filepath.Join(sessionDir, "index.json"), data, 0600)
 }
 
 func updateIndex() error {
@@ -373,14 +379,14 @@ func loadSession(id string) (*Session, error) {
 }
 
 func saveSession(s *Session) error {
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(sessionDir, s.ID+".json"), data, 0644)
+	return os.WriteFile(filepath.Join(sessionDir, s.ID+".json"), data, 0600)
 }
 
 // migrateOldFormat converts old current.json format to new multi-session format

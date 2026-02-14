@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,7 +20,10 @@ const (
 	OpenAICallbackPort = 1455
 )
 
-var openaiPendingPKCE *PKCECodes
+var (
+	openaiPendingPKCE   *PKCECodes
+	openaiPendingPKCEMu sync.Mutex
+)
 
 // StartOpenAIOAuth starts the OAuth flow for OpenAI
 func StartOpenAIOAuth() (string, error) {
@@ -27,10 +31,15 @@ func StartOpenAIOAuth() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate PKCE: %w", err)
 	}
+	openaiPendingPKCEMu.Lock()
 	openaiPendingPKCE = pkce
+	openaiPendingPKCEMu.Unlock()
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", OpenAICallbackPort)
-	state := GenerateState()
+	state, err := GenerateState()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
+	}
 
 	params := url.Values{
 		"response_type":           {"code"},
@@ -59,7 +68,10 @@ func StartOpenAIOAuthWithCallback() (*OAuthTokens, error) {
 	}
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", OpenAICallbackPort)
-	state := GenerateState()
+	state, err := GenerateState()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate state: %w", err)
+	}
 
 	params := url.Values{
 		"response_type":           {"code"},

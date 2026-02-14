@@ -141,21 +141,23 @@
 - [x] **Affichage clair** : bordure couleur provider (existant), messages système par round
 - [x] Ancien code cascade supprimé (CascadePhase, CascadeStreamMsg, cascadeState)
 
-### Add Provider Rework (P1)
+### Add Provider Rework (P1) ✅
 
-- [ ] Add Provider via Huh forms (cursor, sélection, validation) *(reporté de v0.3.2)*
+- [x] Add Provider via custom forms (textinput.Model, Catppuccin theme, password mask, validation)
+- [x] Format selector (openai/anthropic/google) avec cycle h/l
 
-### Ollama First-Class (P1)
+### Coûts Avancés (P1) ✅
+
+- [x] Token count par message (InputTokens/OutputTokens, annotation sous chaque message)
+- [x] Export des coûts (`/costs csv` ou `/costs json`)
+- [x] Per-provider costs dans InfoPanel
+
+### Ollama First-Class (P1) *(reporté — pas testable sur ThinkPad)*
 
 - [ ] Auto-détection d'Ollama (probe `localhost:11434` au démarrage)
 - [ ] Liste des modèles locaux dans le model picker (tag `[local]`)
 - [ ] Config simplifiée : `"ollama": { "url": "http://localhost:11434" }`
 - [ ] Support serveur distant (`http://192.168.1.100:11434`)
-
-### Coûts Avancés (P1)
-
-- [ ] Token count par message (optionnel, dans l'info panel)
-- [ ] Export des coûts (CSV/JSON, pour freelances)
 
 ---
 

@@ -6,29 +6,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/pedromelo/poly/internal/sandbox"
+	"github.com/pedromelo/poly/internal/security"
 )
 
-// Blocked command patterns (dangerous operations)
-var blockedPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)\brm\s+(-[rf]+\s+)+/($|\s)`),       // rm -rf /
-	regexp.MustCompile(`(?i)\brm\s+(-[rf]+\s+)+/(bin|boot|dev|etc|home|lib|opt|root|sbin|srv|sys|usr|var)\b`), // rm on system dirs
-	regexp.MustCompile(`(?i)\bmkfs\b`),                          // format disk
-	regexp.MustCompile(`(?i)\bdd\s+.*of=/dev/`),                 // write to devices
-	regexp.MustCompile(`:\(\)\s*\{\s*:\|\s*:&\s*\}\s*;?\s*:`),   // fork bomb
-	regexp.MustCompile(`(?i)\bcurl\b.*\|\s*(ba)?sh`),            // curl | bash
-	regexp.MustCompile(`(?i)\bwget\b.*\|\s*(ba)?sh`),            // wget | bash
-	regexp.MustCompile(`(?i)\bchmod\s+[0-7]*777\s+/`),           // chmod 777 /
-	regexp.MustCompile(`(?i)\bshutdown\b`),                      // shutdown
-	regexp.MustCompile(`(?i)\breboot\b`),                        // reboot
-}
-
 // NOTE: Safe command classification is handled by permission.ClassifyBashCommand().
-// The blocked patterns below are a second layer of defense in BashTool.Execute().
+// Blocked patterns are in internal/security and shared with shell/executor.go.
 
 const (
 	maxOutput     = 30000
@@ -71,10 +57,8 @@ func (t *BashTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	// Check for blocked patterns
-	for _, pattern := range blockedPatterns {
-		if pattern.MatchString(command) {
-			return ToolResult{Content: "Blocked: dangerous command pattern detected", IsError: true}
-		}
+	if security.IsBlocked(command) {
+		return ToolResult{Content: "Blocked: dangerous command pattern detected", IsError: true}
 	}
 
 	// Determine timeout
