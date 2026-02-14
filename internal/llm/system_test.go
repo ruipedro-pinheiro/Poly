@@ -8,12 +8,12 @@ import (
 )
 
 func TestGetMaxTableRounds_Default(t *testing.T) {
-	// Ensure config is loaded (default has MaxTableRounds=0)
-	cfg := config.Get()
-	if cfg == nil {
-		t.Fatal("config.Get() returned nil")
-	}
-	// Default config has MaxTableRounds = 0, so GetMaxTableRounds should return 5
+	// Use a clean config with MaxTableRounds=0 to test the default fallback
+	config.SetForTest(&config.Config{
+		Settings: config.SettingsConfig{MaxTableRounds: 0},
+	})
+	defer config.SetForTest(nil)
+
 	got := GetMaxTableRounds()
 	if got != 5 {
 		t.Errorf("GetMaxTableRounds() default = %d, want 5", got)

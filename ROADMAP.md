@@ -165,17 +165,25 @@
 
 > Objectif : Produit solide avant la release
 
-### Docker & Portabilité (P0)
+### Hardening (P0) ✅
 
-- [ ] `Dockerfile` multi-stage : build avec Go 1.25.6, binaire statique final
-- [ ] Sandbox Docker activé par défaut (les tools LLM s'exécutent dans un conteneur)
-- [ ] Volumes/bind mounts : permettre read/write en dehors du dossier Poly (projets, fichiers user)
-- [ ] Zéro dépendance sur l'hôte : fonctionne sur les Macs 42 (Ubuntu) sans setup-42.sh
+- [x] File permissions : 0644→0600 (config, session, providers, history, auth, updater)
+- [x] Race conditions : sync.RWMutex/Mutex/Once sur globals (streaming, gemini, auth)
+- [x] Security : Google OAuth secret → env var, hooks injection fix, shared blocklist, SSRF check
+- [x] Best practices : crypto/rand UUID, error checking, dead code removal
+
+### Docker & Portabilité (P0) ✅
+
+- [x] `Dockerfile` multi-stage : build avec Go 1.25.6, binaire statique final
+- [x] `.dockerignore` pour build propre
+- [ ] Sandbox Docker activé par défaut (les tools LLM s'exécutent dans un conteneur) *(reporté v1.0)*
+- [ ] Volumes/bind mounts *(reporté v1.0)*
 - [ ] `docker run` one-liner pour lancer Poly sans installation
 
 ### Tests & Performance (P0)
 
-- [ ] 60%+ coverage globale
+- [x] 10 nouveaux fichiers de tests (security 100%, config 47%, session 41%, hooks 37%, llm 23%, tools 22%)
+- [ ] 60%+ coverage globale *(en cours — TUI à 0.5% tire la moyenne vers le bas)*
 - [ ] Coverage TUI : tests pour les interactions clavier principales
 - [ ] Stress test 20+ providers
 - [ ] Temps premier message < 500ms
