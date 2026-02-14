@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/pedromelo/poly/internal/auth"
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/llm"
 	"github.com/pedromelo/poly/internal/tools"
 )
@@ -17,8 +17,8 @@ import (
 // streamEventChan stores the current streaming channel
 var streamEventChan <-chan llm.StreamEvent
 
-// cascadeStreamChans stores channels for @all cascade streaming
-var cascadeStreamChans = make(map[string]<-chan llm.StreamEvent)
+// tableRondeStreamChans stores channels for @all Table Ronde streaming
+var tableRondeStreamChans = make(map[string]<-chan llm.StreamEvent)
 
 // getToolDefinitions converts tools to LLM format
 func getToolDefinitions() []llm.ToolDefinition {
@@ -94,9 +94,9 @@ func convertMessageImages(msg Message) []llm.Image {
 
 // sendToProvider sends a message to the specified provider and starts streaming
 func (m *Model) sendToProvider(providerName string, content string) tea.Cmd {
-	// Handle @all - cascade orchestration (cheapest first, then reviewers)
+	// Handle @all - Table Ronde orchestration (all providers in parallel)
 	if providerName == "all" {
-		return m.sendCascade(content)
+		return m.sendTableRonde(content)
 	}
 
 	p, ok := m.providers[providerName]
@@ -172,8 +172,8 @@ func (m *Model) sendToProvider(providerName string, content string) tea.Cmd {
 	return readStreamEvent(providerName)
 }
 
-// sendCascade implements the @all cascade: cheapest provider responds first, others review
-func (m *Model) sendCascade(content string) tea.Cmd {
+// sendTableRonde implements the @all Table Ronde: all providers respond in parallel
+func (m *Model) sendTableRonde(content string) tea.Cmd {
 	// Find all configured providers
 	configuredProviders := []string{}
 	for name, p := range m.providers {
@@ -192,16 +192,12 @@ func (m *Model) sendCascade(content string) tea.Cmd {
 		}
 	}
 
-	// Sort by cost tier (ascending - cheapest first)
-	sort.Slice(configuredProviders, func(i, j int) bool {
-		return llm.GetProviderCostTier(configuredProviders[i]) < llm.GetProviderCostTier(configuredProviders[j])
-	})
+	// If only 1 provider, fallback to normal single-provider streaming
+	if len(configuredProviders) == 1 {
+		return m.sendToProvider(configuredProviders[0], content)
+	}
 
-	// First provider = responder (cheapest), rest = reviewers
-	responder := configuredProviders[0]
-	reviewers := configuredProviders[1:]
-
-	// Estimate cascade cost
+	// Estimate cost
 	approxTokens := 0
 	for _, msg := range m.messages {
 		approxTokens += (len(msg.Content) + 3) / 4
@@ -223,11 +219,11 @@ func (m *Model) sendCascade(content string) tea.Cmd {
 	if estimatedCost > 0 {
 		m.messages = append(m.messages, Message{
 			Role:    "system",
-			Content: fmt.Sprintf("Cascade to %d providers — estimated ~$%.2f", len(configuredProviders), estimatedCost),
+			Content: fmt.Sprintf("Table Ronde to %d providers — estimated ~$%.2f", len(configuredProviders), estimatedCost),
 		})
 	}
 
-	// Capture original user images for reviewers
+	// Capture original user images for later rounds
 	var userImages []llm.Image
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role == "user" {
@@ -236,110 +232,47 @@ func (m *Model) sendCascade(content string) tea.Cmd {
 		}
 	}
 
-	// Initialize cascade state
-	m.cascade = &cascadeState{
-		responder:       responder,
-		reviewers:       reviewers,
-		activeReviewers: make(map[string]bool),
+	// Initialize Table Ronde state
+	m.tableRonde = &tableRondeState{
+		participants:    configuredProviders,
+		activeProviders: make(map[string]bool),
 		messageIndices:  make(map[string]int),
-		phase:           CascadeResponder,
+		round:           1,
+		maxRounds:       llm.GetMaxTableRounds(),
 		userQuestion:    content,
 		userImages:      userImages,
 	}
 
-	// Add message slot for responder
-	m.cascade.messageIndices[responder] = len(m.messages)
+	// Add system message for round 1
 	m.messages = append(m.messages, Message{
-		Role:     "assistant",
-		Content:  "",
-		Provider: responder,
+		Role:    "system",
+		Content: fmt.Sprintf("Table Ronde — Round 1 with %d providers", len(configuredProviders)),
 	})
 
-	// Add message slots for reviewers (they'll be filled in phase 2)
-	for _, rev := range reviewers {
-		m.cascade.activeReviewers[rev] = true
-		m.cascade.messageIndices[rev] = len(m.messages)
+	// Create message slots for ALL providers
+	for _, name := range configuredProviders {
+		m.tableRonde.activeProviders[name] = true
+		m.tableRonde.messageIndices[name] = len(m.messages)
 		m.messages = append(m.messages, Message{
 			Role:     "assistant",
 			Content:  "",
-			Provider: rev,
+			Provider: name,
 		})
 	}
 
-	// Build LLM messages from history
+	// Build LLM messages from full chat history
 	llmMessages := m.buildLLMMessages()
 
-	// Create context with cancel
+	// Create ONE shared context with cancel
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelCtx = cancel
 
-	// Start streaming the responder with "responder" role
-	p := m.providers[responder]
-	if models, ok := llm.GetModelVariants()[responder]; ok {
-		if model, ok := models["default"]; ok {
-			p.SetModel(model)
-		}
-	}
-	var toolDefs []llm.ToolDefinition
-	if p.SupportsTools() {
-		toolDefs = getToolDefinitions()
-	}
-
-	// Filter images if not supported
-	providerMessages := filterMessagesForProvider(llmMessages, responder)
-
-	cascadeStreamChans[responder] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "responder", ThinkingMode: m.thinkingMode})
-	m.status = ">> " + responder + " responding..."
-
-	return readCascadeEvent(responder, CascadeResponder)
-}
-
-// startReviewers launches all reviewer streams after the responder is done
-func (m *Model) startReviewers() tea.Cmd {
-	if m.cascade == nil || len(m.cascade.reviewers) == 0 {
-		// No reviewers - we're done
-		m.status = "Ready"
-		m.isStreaming = false
-		m.cascade = nil
-		return nil
-	}
-
-	m.status = "Reviewers checking..."
-
-	// IMPORTANT: Do NOT include full conversation history for reviewers.
-	responderDisplayName := m.cascade.responder
-	if p, ok := m.providers[m.cascade.responder]; ok {
-		responderDisplayName = p.DisplayName()
-	}
-
-	reviewContext := fmt.Sprintf(
-		"[REVIEW TASK]\n"+
-			"A user asked the following question:\n\"%s\"\n\n"+
-			"The AI named %s (provider: %s) responded with:\n---\n%s\n---\n\n"+
-			"You are a DIFFERENT AI reviewing this response. This is NOT your response.\n"+
-			"If the response is correct and complete: output only \"✓\".\n"+
-			"If you find factual errors, security issues, or missing information: state the correction directly.\n\n"+
-			"IMPORTANT: If the user's question asks each AI personally (e.g., \"your name\", \"who are you\",\n"+
-			"\"introduce yourself\"), then give YOUR OWN answer instead of reviewing.",
-		m.cascade.userQuestion,
-		responderDisplayName,
-		m.cascade.responder,
-		m.cascade.responderContent,
-	)
-	reviewMessages := []llm.Message{{
-		Role:    "user",
-		Content: reviewContext,
-		Images:  m.cascade.userImages,
-	}}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelCtx = cancel
-
-	cmds := make([]tea.Cmd, 0, len(m.cascade.reviewers))
-	for _, revName := range m.cascade.reviewers {
-		p := m.providers[revName]
-		if models, ok := llm.GetModelVariants()[revName]; ok {
-			if model, ok := models["default"]; ok {
+	// Start ALL providers streaming in parallel
+	cmds := make([]tea.Cmd, 0, len(configuredProviders))
+	for _, name := range configuredProviders {
+		p := m.providers[name]
+		if variants, ok := llm.GetModelVariants()[name]; ok {
+			if model, ok := variants["default"]; ok {
 				p.SetModel(model)
 			}
 		}
@@ -348,14 +281,126 @@ func (m *Model) startReviewers() tea.Cmd {
 			toolDefs = getToolDefinitions()
 		}
 
-		providerMessages := filterMessagesForProvider(reviewMessages, revName)
-		cascadeStreamChans[revName] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "reviewer", ThinkingMode: m.thinkingMode})
+		providerMessages := filterMessagesForProvider(llmMessages, name)
+		tableRondeStreamChans[name] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode})
 
-		rn := revName // capture
-		cmds = append(cmds, readCascadeEvent(rn, CascadeReviewer))
+		n := name // capture
+		cmds = append(cmds, readTableRondeEvent(n, 1))
 	}
 
+	m.status = fmt.Sprintf("Table Ronde — %d providers responding...", len(configuredProviders))
+
 	return tea.Batch(cmds...)
+}
+
+// startNextRound launches the next Table Ronde round for mentioned providers
+func (m *Model) startNextRound(mentions []pendingMention) tea.Cmd {
+	if m.tableRonde == nil || m.tableRonde.round >= m.tableRonde.maxRounds || len(mentions) == 0 {
+		m.finishTableRonde()
+		return nil
+	}
+
+	m.tableRonde.round++
+	round := m.tableRonde.round
+
+	// Build "mentioned by" description
+	mentionedBy := make([]string, 0, len(mentions))
+	for _, mention := range mentions {
+		mentionedBy = append(mentionedBy, mention.target+" (by "+mention.by+")")
+	}
+
+	// Add system message for this round
+	m.messages = append(m.messages, Message{
+		Role:    "system",
+		Content: fmt.Sprintf("Table Ronde — Round %d (mentioned: %s)", round, strings.Join(mentionedBy, ", ")),
+	})
+
+	// Create context with cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelCtx = cancel
+
+	cmds := make([]tea.Cmd, 0, len(mentions))
+	for _, mention := range mentions {
+		name := mention.target
+		p, ok := m.providers[name]
+		if !ok || !p.IsConfigured() {
+			continue
+		}
+
+		// Create message slot
+		m.tableRonde.activeProviders[name] = true
+		m.tableRonde.messageIndices[name] = len(m.messages)
+		m.messages = append(m.messages, Message{
+			Role:     "assistant",
+			Content:  "",
+			Provider: name,
+		})
+
+		// Apply model variant
+		if variants, ok := llm.GetModelVariants()[name]; ok {
+			if model, ok := variants["default"]; ok {
+				p.SetModel(model)
+			}
+		}
+		var toolDefs []llm.ToolDefinition
+		if p.SupportsTools() {
+			toolDefs = getToolDefinitions()
+		}
+
+		// Build full conversation history (ALL messages including previous rounds)
+		llmMessages := m.buildLLMMessages()
+		providerMessages := filterMessagesForProvider(llmMessages, name)
+		tableRondeStreamChans[name] = p.Stream(ctx, providerMessages, toolDefs, llm.StreamOptions{Role: "participant", ThinkingMode: m.thinkingMode})
+
+		n := name // capture
+		cmds = append(cmds, readTableRondeEvent(n, round))
+	}
+
+	if len(cmds) == 0 {
+		m.finishTableRonde()
+		return nil
+	}
+
+	m.status = fmt.Sprintf("Table Ronde — Round %d (%d providers)...", round, len(cmds))
+
+	return tea.Batch(cmds...)
+}
+
+// extractMentions scans completed messages for @provider mentions
+func (m *Model) extractMentions() []pendingMention {
+	if m.tableRonde == nil {
+		return nil
+	}
+	var mentions []pendingMention
+	seen := make(map[string]bool)
+	providerNames := config.GetProviderNames()
+	for provider, idx := range m.tableRonde.messageIndices {
+		if idx >= len(m.messages) {
+			continue
+		}
+		content := strings.ToLower(m.messages[idx].Content)
+		for _, name := range providerNames {
+			if name == provider {
+				continue // skip self-mentions
+			}
+			if strings.Contains(content, "@"+strings.ToLower(name)) && !seen[name] {
+				seen[name] = true
+				mentions = append(mentions, pendingMention{target: name, by: provider})
+			}
+		}
+	}
+	return mentions
+}
+
+// finishTableRonde cleans up Table Ronde state
+func (m *Model) finishTableRonde() {
+	m.status = "Ready"
+	m.isStreaming = false
+	m.tableRonde = nil
+	// Clean up stream channels
+	for k := range tableRondeStreamChans {
+		delete(tableRondeStreamChans, k)
+	}
 }
 
 // buildLLMMessages converts chat history to LLM messages (excluding empty slots)
@@ -442,44 +487,44 @@ func readStreamEvent(provider string) tea.Cmd {
 	}
 }
 
-// readCascadeEvent reads from a specific provider's stream during cascade
-func readCascadeEvent(provider string, phase CascadePhase) tea.Cmd {
+// readTableRondeEvent reads from a specific provider's stream during Table Ronde
+func readTableRondeEvent(provider string, round int) tea.Cmd {
 	return func() tea.Msg {
-		ch, ok := cascadeStreamChans[provider]
+		ch, ok := tableRondeStreamChans[provider]
 		if !ok || ch == nil {
-			return CascadeStreamMsg{Done: true, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
 		}
 
 		event, ok := <-ch
 		if !ok {
-			return CascadeStreamMsg{Done: true, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
 		}
 
 		switch event.Type {
 		case "content":
-			return CascadeStreamMsg{Content: event.Content, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Content: event.Content, Provider: provider, Round: round}
 		case "thinking":
-			return CascadeStreamMsg{Thinking: event.Thinking, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Thinking: event.Thinking, Provider: provider, Round: round}
 		case "tool_use":
-			return CascadeStreamMsg{
+			return TableRondeStreamMsg{
 				ToolCall: event.ToolCall,
 				Provider: provider,
-				Phase:    phase,
+				Round:    round,
 			}
 		case "tool_result":
-			return CascadeStreamMsg{
+			return TableRondeStreamMsg{
 				ToolCall:   event.ToolCall,
 				ToolResult: event.ToolResult,
 				Provider:   provider,
-				Phase:      phase,
+				Round:      round,
 			}
 		case "done":
-			return CascadeStreamMsg{Done: true, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
 		case "error":
-			return CascadeStreamMsg{Error: event.Error, Provider: provider, Phase: phase}
+			return TableRondeStreamMsg{Error: event.Error, Provider: provider, Round: round}
 		}
 
-		return CascadeStreamMsg{Done: true, Provider: provider, Phase: phase}
+		return TableRondeStreamMsg{Done: true, Provider: provider, Round: round}
 	}
 }
 

@@ -213,6 +213,14 @@ func BuildSystemPrompt(providerName string, role string) string {
 		prompt.WriteString("  (e.g., \"what is YOUR name?\", \"introduce yourself\", \"who are you?\"),\n")
 		prompt.WriteString("  then answer the question yourself instead of reviewing. Give YOUR answer.\n")
 		prompt.WriteString("- NEVER say \"I agree\", \"great answer\", or validate emotionally. CORRECT or say \"✓\".\n\n")
+	case "participant":
+		prompt.WriteString("=== ROLE: TABLE RONDE PARTICIPANT ===\n")
+		prompt.WriteString("- You are in a Table Ronde group conversation. All participants are equal.\n")
+		prompt.WriteString("- There are no reviewers or responders — everyone gives their own perspective.\n")
+		prompt.WriteString("- Give YOUR unique perspective on the topic. Be concise and direct.\n")
+		prompt.WriteString(fmt.Sprintf("- You can @mention other providers to invoke them: %s\n", strings.Join(mentions, ", ")))
+		prompt.WriteString("- Only @mention if you genuinely want another AI's input on a specific point.\n")
+		prompt.WriteString("- Keep responses focused. This is a round-table discussion, not a monologue.\n\n")
 	default:
 		prompt.WriteString("=== ROLE: DIRECT ===\n")
 		prompt.WriteString("- Answer the user directly. Be helpful and aware of multi-AI context.\n\n")
@@ -299,4 +307,13 @@ func GetMaxToolTurns() int {
 		return cfg.Settings.MaxToolTurns
 	}
 	return 50
+}
+
+// GetMaxTableRounds returns max Table Ronde rounds from config (default 5)
+func GetMaxTableRounds() int {
+	cfg := getConfig()
+	if cfg.Settings.MaxTableRounds > 0 {
+		return cfg.Settings.MaxTableRounds
+	}
+	return 5
 }

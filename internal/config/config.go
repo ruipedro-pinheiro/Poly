@@ -53,6 +53,7 @@ type ThemeConfig struct {
 // SettingsConfig defines general settings
 type SettingsConfig struct {
 	MaxToolTurns    int    `json:"max_tool_turns"`
+	MaxTableRounds  int    `json:"max_table_rounds"`
 	StreamingBuffer int    `json:"streaming_buffer"`
 	SaveSessions    bool   `json:"save_sessions"`
 	ColorTheme      string `json:"color_theme,omitempty"`
@@ -262,6 +263,17 @@ func GetSandboxImage() string {
 	return "alpine:latest"
 }
 
+// SetMaxTableRounds updates the max table rounds setting and saves config
+func SetMaxTableRounds(n int) {
+	configMu.Lock()
+	if current == nil {
+		current = DefaultConfig()
+	}
+	current.Settings.MaxTableRounds = n
+	configMu.Unlock()
+	Save()
+}
+
 // GetMCPServers returns the configured MCP servers
 func GetMCPServers() map[string]MCPServerConfig {
 	cfg := Get()
@@ -341,6 +353,9 @@ func mergeConfig(base, user *Config) *Config {
 	// Merge settings
 	if user.Settings.MaxToolTurns > 0 {
 		base.Settings.MaxToolTurns = user.Settings.MaxToolTurns
+	}
+	if user.Settings.MaxTableRounds > 0 {
+		base.Settings.MaxTableRounds = user.Settings.MaxTableRounds
 	}
 	if user.Settings.StreamingBuffer > 0 {
 		base.Settings.StreamingBuffer = user.Settings.StreamingBuffer

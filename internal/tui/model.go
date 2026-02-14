@@ -63,8 +63,8 @@ type Model struct {
 	modelPickerFilter  string
 	recentModels       []modelOption
 
-	// Cascade state for @all orchestration
-	cascade *cascadeState
+	// Table Ronde state for @all orchestration
+	tableRonde *tableRondeState
 
 	// Add Provider form state
 	addProviderField  int      // 0=id, 1=url, 2=apikey, 3=model, 4=format

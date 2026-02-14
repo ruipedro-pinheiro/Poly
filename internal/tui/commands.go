@@ -283,6 +283,27 @@ func initCommands() *CommandRegistry {
 	})
 
 	r.Register(&Command{
+		Name:        "rounds",
+		Category:    "Config",
+		Description: "Show or set max Table Ronde rounds",
+		Usage:       "/rounds [N]",
+		Handler: func(m *Model, args []string) {
+			if len(args) == 0 {
+				current := llm.GetMaxTableRounds()
+				m.status = fmt.Sprintf("Max Table Ronde rounds: %d", current)
+				return
+			}
+			n, err := strconv.Atoi(args[0])
+			if err != nil || n < 1 || n > 20 {
+				m.status = "Usage: /rounds [1-20]"
+				return
+			}
+			config.SetMaxTableRounds(n)
+			m.status = fmt.Sprintf("Max Table Ronde rounds set to %d", n)
+		},
+	})
+
+	r.Register(&Command{
 		Name:        "export",
 		Category:    "Session",
 		Description: "Export conversation to file",

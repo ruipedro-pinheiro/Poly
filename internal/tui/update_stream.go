@@ -148,99 +148,119 @@ func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleCascadeStreamMsg processes a cascade streaming event
-func (m Model) handleCascadeStreamMsg(msg CascadeStreamMsg) (tea.Model, tea.Cmd) {
-	if m.cascade != nil {
-		if idx, ok := m.cascade.messageIndices[msg.Provider]; ok {
-			// Bounds check to prevent panic
-			if idx < 0 || idx >= len(m.messages) {
-				return m, nil
-			}
-			if msg.Error != nil {
-				if llm.IsImageError(msg.Error) {
-					llm.SetImageSupport(msg.Provider, false)
-					m.messages[idx].Content = "(Images not supported)"
-				} else {
-					m.messages[idx].Content = "Error: " + msg.Error.Error()
-				}
-				if msg.Phase == CascadeResponder {
-					m.status = "Ready"
-					m.isStreaming = false
-					m.cascade = nil
-				} else {
-					m.cascade.activeReviewers[msg.Provider] = false
-				}
-			} else if msg.Done {
-				if msg.Phase == CascadeResponder {
-					m.cascade.responderContent = m.messages[idx].Content
-					m.cascade.phase = CascadeReviewer
-					m.saveMessageAt(idx)
-					m.updateViewport()
-					return m, m.startReviewers()
-				} else {
-					m.cascade.activeReviewers[msg.Provider] = false
-					m.saveMessageAt(idx)
-				}
-			} else {
-				// Handle tool_use: tool starting
-				if msg.ToolCall != nil && msg.ToolResult == nil {
-					m.messages[idx].ToolCalls = append(m.messages[idx].ToolCalls, ToolCallData{
-						Name:   msg.ToolCall.Name,
-						Args:   msg.ToolCall.Arguments,
-						Status: 1, // running
-					})
-					m.updateViewport()
-					return m, readCascadeEvent(msg.Provider, msg.Phase)
-				}
+// handleTableRondeStreamMsg processes a Table Ronde streaming event
+func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, tea.Cmd) {
+	if m.tableRonde == nil {
+		return m, nil
+	}
 
-				// Handle tool_result: tool finished
-				if msg.ToolCall != nil && msg.ToolResult != nil {
-					for i := len(m.messages[idx].ToolCalls) - 1; i >= 0; i-- {
-						tc := &m.messages[idx].ToolCalls[i]
-						if tc.Name == msg.ToolCall.Name && tc.Status == 1 {
-							tc.Result = msg.ToolResult.Content
-							tc.IsError = msg.ToolResult.IsError
-							if msg.ToolResult.IsError {
-								tc.Status = 3 // error
-							} else {
-								tc.Status = 2 // success
-							}
-							break
-						}
-					}
-					m.updateViewport()
-					return m, readCascadeEvent(msg.Provider, msg.Phase)
-				}
+	idx, ok := m.tableRonde.messageIndices[msg.Provider]
+	if !ok {
+		return m, nil
+	}
 
-				if msg.Thinking != "" && m.thinkingMode {
-					m.messages[idx].Thinking += msg.Thinking
+	// Bounds check to prevent panic
+	if idx < 0 || idx >= len(m.messages) {
+		return m, nil
+	}
+
+	if msg.Error != nil {
+		if llm.IsImageError(msg.Error) {
+			llm.SetImageSupport(msg.Provider, false)
+			m.messages[idx].Content = "(Images not supported)"
+		} else {
+			m.messages[idx].Content = "Error: " + msg.Error.Error()
+		}
+		m.tableRonde.activeProviders[msg.Provider] = false
+		m.updateViewport()
+		return m, m.checkRoundComplete()
+	}
+
+	if msg.Done {
+		m.tableRonde.activeProviders[msg.Provider] = false
+		m.saveMessageAt(idx)
+		m.updateViewport()
+		return m, m.checkRoundComplete()
+	}
+
+	// Handle tool_use: tool starting
+	if msg.ToolCall != nil && msg.ToolResult == nil {
+		toolIdx := len(m.messages[idx].ToolCalls)
+		m.messages[idx].ToolCalls = append(m.messages[idx].ToolCalls, ToolCallData{
+			Name:   msg.ToolCall.Name,
+			Args:   msg.ToolCall.Arguments,
+			Status: 1, // running
+		})
+		m.messages[idx].Blocks = append(m.messages[idx].Blocks, ContentBlock{
+			Type:    "tool",
+			ToolIdx: toolIdx,
+		})
+		m.updateViewport()
+		return m, readTableRondeEvent(msg.Provider, msg.Round)
+	}
+
+	// Handle tool_result: tool finished
+	if msg.ToolCall != nil && msg.ToolResult != nil {
+		for i := len(m.messages[idx].ToolCalls) - 1; i >= 0; i-- {
+			tc := &m.messages[idx].ToolCalls[i]
+			if tc.Name == msg.ToolCall.Name && tc.Status == 1 {
+				tc.Result = msg.ToolResult.Content
+				tc.IsError = msg.ToolResult.IsError
+				if msg.ToolResult.IsError {
+					tc.Status = 3 // error
+				} else {
+					tc.Status = 2 // success
 				}
-				m.messages[idx].Content += msg.Content
-				if msg.Phase == CascadeResponder {
-					m.cascade.responderContent += msg.Content
-				}
-				m.updateViewport()
-				return m, readCascadeEvent(msg.Provider, msg.Phase)
+				break
 			}
-			// Check if all reviewers are done
-			if m.cascade != nil && m.cascade.phase == CascadeReviewer {
-				allDone := true
-				for _, active := range m.cascade.activeReviewers {
-					if active {
-						allDone = false
-						break
-					}
-				}
-				if allDone {
-					m.status = "Ready"
-					m.isStreaming = false
-					m.cascade = nil
-				}
-			}
-			m.updateViewport()
+		}
+		m.updateViewport()
+		return m, readTableRondeEvent(msg.Provider, msg.Round)
+	}
+
+	// Handle thinking
+	if msg.Thinking != "" && m.thinkingMode {
+		m.messages[idx].Thinking += msg.Thinking
+	}
+
+	// Accumulate content
+	m.messages[idx].Content += msg.Content
+	if msg.Content != "" {
+		blocks := m.messages[idx].Blocks
+		if len(blocks) > 0 && blocks[len(blocks)-1].Type == "text" {
+			blocks[len(blocks)-1].Text += msg.Content
+			m.messages[idx].Blocks = blocks
+		} else {
+			m.messages[idx].Blocks = append(m.messages[idx].Blocks, ContentBlock{
+				Type: "text",
+				Text: msg.Content,
+			})
 		}
 	}
-	return m, nil
+
+	m.updateViewport()
+	return m, readTableRondeEvent(msg.Provider, msg.Round)
+}
+
+// checkRoundComplete checks if all providers are done in the current round
+func (m *Model) checkRoundComplete() tea.Cmd {
+	if m.tableRonde == nil {
+		return nil
+	}
+	// Check if all active providers are done
+	for _, active := range m.tableRonde.activeProviders {
+		if active {
+			return nil // still streaming
+		}
+	}
+	// All done — check for @mentions
+	mentions := m.extractMentions()
+	if len(mentions) > 0 && m.tableRonde.round < m.tableRonde.maxRounds {
+		return m.startNextRound(mentions)
+	}
+	// No mentions or max rounds reached — finish
+	m.finishTableRonde()
+	return nil
 }
 
 // updateTokenStats updates token/cost tracking from a completed stream event

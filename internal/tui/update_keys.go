@@ -321,6 +321,11 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.cancelCtx()
 			m.isStreaming = false
 			m.streamTokenCount = 0
+			m.tableRonde = nil
+			// Clean up Table Ronde stream channels
+			for k := range tableRondeStreamChans {
+				delete(tableRondeStreamChans, k)
+			}
 			m.statusBar.Update(status.SetStreamingMsg{Active: false})
 
 			// Add cancel summary

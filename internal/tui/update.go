@@ -57,8 +57,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case CascadeStreamMsg:
-		return m.handleCascadeStreamMsg(msg)
+	case TableRondeStreamMsg:
+		return m.handleTableRondeStreamMsg(msg)
 
 	// --- Compaction ---
 	case CompactMsg:

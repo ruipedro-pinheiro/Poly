@@ -1,6 +1,6 @@
 # Poly-Go — Roadmap
 
-> Dernière mise à jour : 13 février 2026
+> Dernière mise à jour : 13 février 2026 (v0.3.3)
 > Basée sur le [Cahier des Charges](./CAHIER_DES_CHARGES.md) et les [Personas/Use Cases](./docs/ux/02-personas-use-cases.md)
 
 ---
@@ -50,49 +50,79 @@
 
 ---
 
-## v0.3.1 — Stabilité (Mars 2026)
+## v0.3.1 — Stabilité (Février 2026) ✅
 
 > Objectif : Rendre le produit fiable et testable
 
-### Tests (P0)
+### Tests (P0) ✅
 
-- [ ] Coverage providers : tests pour anthropic.go, gpt.go, gemini.go, grok.go, custom.go
-- [ ] Coverage streaming : tests pour update_stream.go, streaming.go
-- [ ] Coverage tools : tests pour chaque tool dans registry.go
-- [ ] Objectif : 40%+ de coverage globale (actuellement ~15%)
+- [x] 28+ tests : pricing_test.go (15), edit_test.go (13+), pathcheck_test.go (8)
+- [x] Tests config, memory, polymd, provider registry, permission, retry, compaction, MCP manager
+- [ ] Coverage providers : tests pour anthropic.go, gpt.go, gemini.go, grok.go, custom.go *(reporté v0.5.0)*
+- [ ] Coverage streaming : tests pour update_stream.go, streaming.go *(reporté v0.5.0)*
+- [ ] Objectif : 40%+ de coverage globale *(reporté v0.5.0, actuellement ~15-25%)*
 
-### CI/CD (P0)
+### CI/CD (P0) ✅
 
-- [ ] GitHub Actions : build + test + lint sur chaque push
-- [ ] Makefile targets pour CI (make ci)
+- [x] GitHub Actions : build + vet + test -race sur chaque push/PR
+- [x] `.github/workflows/ci.yml`
+- [x] Makefile targets : `make ci`, `make test`, `make build`, `make lint`
 
-### Bug Fixes (P0)
+### Responsive (P0) ✅
 
-- [ ] Cascade @all : UX à revoir (lag, affichage confus)
-- [ ] Stress test avec 8+ providers configurés
-- [ ] Responsive layout (header compact < 80 cols)
+- [x] Header responsive 3 breakpoints (<60, 60-79, 80+ cols)
+
+### Non fait *(reporté)*
+
+- [ ] Cascade @all : UX à revoir (lag, affichage confus) *(reporté v0.4.0)*
+- [ ] Stress test avec 8+ providers configurés *(reporté v0.5.0)*
 
 ---
 
-## v0.3.2 — UX Polish (Mars - Avril 2026)
+## v0.3.2 — UX Polish (Février 2026) ✅
 
 > Objectif : Finir le polish de l'interface
 
-### Dialogs (P1)
+### Dialogs (P1) ✅
 
-- [ ] Add Provider via Huh forms (cursor, sélection, validation)
-- [ ] Help scrollable + keybindings complètes
-- [ ] Framework de dialog commun (extraire boilerplate)
+- [x] Help dialog : providers dynamiques depuis config, keybindings complètes
+- [ ] Add Provider via Huh forms (cursor, sélection, validation) *(reporté v0.4.0)*
+- [ ] Framework de dialog commun (extraire boilerplate) *(reporté v0.5.0)*
 
-### Streaming UX (P1)
+### Streaming UX (P1) ✅
 
-- [ ] Annulation streaming améliorée (Esc + résumé du contenu généré)
-- [ ] Animations minimales (spinner streaming)
+- [x] Annulation streaming (Esc) : résumé "Cancelled after ~X tokens, Y tools"
+- [ ] Animations minimales (spinner streaming) *(reporté v0.5.0)*
 
-### Responsive (P2)
+### Responsive (P2) ✅
 
-- [ ] Header compact < 80 cols
-- [ ] InfoPanel auto-hide < 100 cols
+- [x] InfoPanel auto-hide < 100 cols
+
+---
+
+## v0.3.3 — Hardening (Février 2026) ✅
+
+> Objectif : Sécurité, nettoyage, et correction des wiring manquants
+
+### Sécurité (P0) ✅
+
+- [x] `apply_diff` : ajout ValidatePath() avant écriture (bypass critique corrigé)
+- [x] `git_diff`/`git_log`/`git_status` : ValidatePath() sur argument path
+- [x] Custom provider `IsConfigured()` vérifie la clé API (au lieu de toujours true)
+
+### Dead Code Removal (P1) ✅
+
+- [x] ~773 lignes supprimées : editor component, list package, old palette system, DefaultStyles, min/max helpers, Send() interface
+- [x] Provider interface simplifiée (Send() retiré, Stream() seul)
+
+### TUI Wiring (P1) ✅
+
+- [x] Header reçoit les tokens/coûts (context% fonctionne)
+- [x] InfoPanel affiche les serveurs MCP
+- [x] InfoPanel affiche le badge sandbox
+- [x] @mentions dynamiques depuis config (plus de hardcoded)
+- [x] /compare résultats persistés en session
+- [x] Warning max tool turns standardisé (emoji partout)
 
 ---
 
@@ -100,15 +130,23 @@
 
 > Objectif : Renforcer le différenciateur unique de Poly
 
-### Orchestrateur Multi-Voix v2 (P1)
+### Table Ronde — Conversation inter-IAs (P0)
 
 L'orchestrateur `@all` actuel est basique (séquentiel, le 1er répond, les autres "reviewent").
+La v2 transforme la cascade en **vraie conversation** : les IAs se parlent, s'interpellent, et débattent.
 
-- [ ] Mode **Séquentiel amélioré** : chaque provider reçoit les réponses précédentes en contexte
-- [ ] Mode **Review croisée** : provider A répond, providers B+C critiquent, A révise
-- [ ] Mode **Consensus** : tous répondent, synthèse automatique des convergences/divergences
-- [ ] Modes configurables par l'utilisateur (`/cascade mode review`)
-- [ ] Affichage clair de qui parle et en réponse à qui
+- [ ] **Inter-mentions dynamiques** : tout provider peut `@mentionner` n'importe quel autre provider configuré dans sa réponse
+- [ ] **Détection des @mentions** dans les réponses IA → déclenche une réponse du provider mentionné
+- [ ] **Contexte partagé** : chaque provider reçoit toute la conversation (y compris les réponses des autres)
+- [ ] **Max turns** : limite configurable (défaut 3-5) pour éviter le ping-pong infini
+- [ ] **Esc coupe tout** : l'user peut stopper la table ronde à tout moment
+- [ ] **System prompt enrichi** : chaque IA sait quels providers sont dans le chat et peut les mentionner
+- [ ] **Affichage clair** : qui parle, en réponse à qui (bordure couleur provider)
+- [ ] Cascade @all UX : fix lag et affichage confus *(reporté de v0.3.1)*
+
+### Add Provider Rework (P1)
+
+- [ ] Add Provider via Huh forms (cursor, sélection, validation) *(reporté de v0.3.2)*
 
 ### Ollama First-Class (P1)
 
@@ -205,23 +243,27 @@ L'orchestrateur `@all` actuel est basique (séquentiel, le 1er répond, les autr
 
 ## Métriques de Succès
 
-### v0.3.0 ✅ (actuel)
+### v0.3.x ✅ (actuel — v0.3.3)
 
-| Métrique | Avant | Après |
-|----------|-------|-------|
-| Code mort TUI | ~2000 lignes | 0 |
+| Métrique | v0.2.x | v0.3.3 |
+|----------|--------|--------|
+| Code mort TUI | ~2000 lignes | 0 (+ ~773 lignes nettoyées en v0.3.3) |
 | Espace chat (% écran) | ~75% | 100% (sans overlay) |
 | Providers hardcodés | 4 | 0 (N dynamique) |
 | Valeurs hardcodées provider | 12+ | 0 |
 | Navigation 100% clavier | Non | Oui |
+| CI/CD | Non | GitHub Actions (build + vet + test -race) |
+| Vulnérabilités connues | 2 (apply_diff, git path) | 0 |
+| Header tokens/context% | Jamais affiché | Fonctionnel |
+| InfoPanel MCP/Sandbox | Jamais affiché | Fonctionnel |
 
 ### v0.5.0
 
 | Métrique | Actuel | Cible |
 |----------|--------|-------|
-| Test coverage | ~15% | 60%+ |
-| CI/CD | Non | GitHub Actions |
+| Test coverage | ~15-25% | 60%+ |
 | Cascade @all UX | Bancal | Utilisable |
+| Stress test providers | Non testé | 20+ |
 
 ### v1.0.0
 

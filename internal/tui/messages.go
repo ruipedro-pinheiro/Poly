@@ -68,36 +68,33 @@ type StreamMsg struct {
 	ToolResult          *llm.ToolResult // tool_result event
 }
 
-// CascadePhase tracks which phase of the @all cascade we're in
-type CascadePhase int
-
-const (
-	CascadeResponder CascadePhase = iota
-	CascadeReviewer
-)
-
-// CascadeStreamMsg is sent during @all cascade streaming
-type CascadeStreamMsg struct {
+// TableRondeStreamMsg is sent during @all Table Ronde streaming
+type TableRondeStreamMsg struct {
 	Provider   string
 	Content    string
 	Thinking   string
 	Done       bool
 	Error      error
-	Phase      CascadePhase
+	Round      int             // current round number (1-based)
 	ToolCall   *llm.ToolCall   // tool_use event
 	ToolResult *llm.ToolResult // tool_result event
 }
 
-// cascadeState tracks @all cascade orchestration state
-type cascadeState struct {
-	responder        string            // provider name of the first responder
-	responderContent string            // accumulated response from the responder
-	reviewers        []string          // reviewer provider names
-	activeReviewers  map[string]bool   // tracks which reviewers are still streaming
+// tableRondeState tracks @all Table Ronde orchestration state
+type tableRondeState struct {
+	participants     []string          // all provider names participating
+	activeProviders  map[string]bool   // tracks which providers are still streaming
 	messageIndices   map[string]int    // provider -> message index
-	phase            CascadePhase      // current phase
+	round            int               // current round (1-based)
+	maxRounds        int               // max rounds before auto-stop
 	userQuestion     string            // original user question
-	userImages       []llm.Image       // original user images (for reviewers)
+	userImages       []llm.Image       // original user images
+}
+
+// pendingMention tracks an @mention request from one provider to another
+type pendingMention struct {
+	target string // provider to invoke next
+	by     string // provider who requested the mention
 }
 
 // OAuthResultMsg is sent when OAuth completes
