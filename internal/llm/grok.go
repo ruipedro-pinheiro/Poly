@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,50 +88,34 @@ func (p *GrokProvider) Stream(ctx context.Context, messages []Message, toolDefs 
 }
 
 func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, apiKey string, eventChan chan<- StreamEvent, role string) {
-	// Build conversation history
-	conversationHistory := make([]map[string]interface{}, 0, len(initialMessages)+1)
+	// Build conversation history with typed structs
+	history := make([]OAIMessage, 0, len(initialMessages)+1)
 
 	// System message with dynamic prompt
-	conversationHistory = append(conversationHistory, map[string]interface{}{
-		"role":    "system",
-		"content": BuildSystemPrompt("grok", role),
-	})
+	history = append(history, NewOAITextMessage("system", BuildSystemPrompt("grok", role)))
 
 	// Add initial messages with image support
 	for _, msg := range initialMessages {
-		conversationHistory = append(conversationHistory, buildGrokMessage(msg))
+		history = append(history, OAIMessage{Role: msg.Role, Content: BuildOAIImageParts(msg)})
 	}
 
-	// Build tools array (OpenAI format)
-	var openaiTools []map[string]interface{}
-	if len(toolDefs) > 0 {
-		openaiTools = make([]map[string]interface{}, len(toolDefs))
-		for i, tool := range toolDefs {
-			openaiTools[i] = map[string]interface{}{
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":        tool.Name,
-					"description": tool.Description,
-					"parameters":  tool.InputSchema,
-				},
-			}
-		}
-	}
+	// Convert tool definitions to OpenAI format
+	oaiTools := OAIToolDefsFromPoly(toolDefs)
 
 	// Agentic loop
 	var fullContent strings.Builder
 
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := map[string]interface{}{
-			"model":          p.config.Model,
-			"max_tokens":     p.config.MaxTokens,
-			"stream":         true,
-			"messages":       conversationHistory,
-			"stream_options": map[string]interface{}{"include_usage": true},
+		body := OAIRequestBody{
+			Model:         p.config.Model,
+			MaxTokens:     p.config.MaxTokens,
+			Stream:        true,
+			Messages:      history,
+			StreamOptions: &OAIStreamOptions{IncludeUsage: true},
 		}
 
-		if len(openaiTools) > 0 {
-			body["tools"] = openaiTools
+		if len(oaiTools) > 0 {
+			body.Tools = oaiTools
 		}
 
 		result, err := p.streamRequest(ctx, body, apiKey, eventChan)
@@ -159,32 +142,22 @@ func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Messag
 		}
 
 		// Build assistant message with tool_calls
-		assistantMsg := map[string]interface{}{
-			"role": "assistant",
-		}
-		if result.content != "" {
-			assistantMsg["content"] = result.content
-		}
-
-		// OpenAI format for tool_calls
-		toolCallsForMsg := make([]map[string]interface{}, len(result.toolCalls))
+		oaiToolCalls := make([]OAIToolCallMsg, len(result.toolCalls))
 		for i, tc := range result.toolCalls {
 			argsJSON, _ := json.Marshal(tc.input)
-			toolCallsForMsg[i] = map[string]interface{}{
-				"id":   tc.id,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":      tc.name,
-					"arguments": string(argsJSON),
+			oaiToolCalls[i] = OAIToolCallMsg{
+				ID:   tc.id,
+				Type: "function",
+				Function: OAIToolCallFunc{
+					Name:      tc.name,
+					Arguments: string(argsJSON),
 				},
 			}
 		}
-		assistantMsg["tool_calls"] = toolCallsForMsg
-		conversationHistory = append(conversationHistory, assistantMsg)
+		history = append(history, NewOAIAssistantMessage(result.content, oaiToolCalls))
 
 		// Execute tools and add results
 		for _, tc := range result.toolCalls {
-			// Emit tool_use event before execution
 			eventChan <- StreamEvent{
 				Type: "tool_use",
 				ToolCall: &ToolCall{
@@ -196,7 +169,6 @@ func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Messag
 
 			toolResult := tools.Execute(tc.name, tc.input)
 
-			// Emit tool_result event after execution
 			eventChan <- StreamEvent{
 				Type: "tool_result",
 				ToolCall: &ToolCall{
@@ -211,12 +183,7 @@ func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Messag
 				},
 			}
 
-			// OpenAI format for tool results
-			conversationHistory = append(conversationHistory, map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": tc.id,
-				"content":      toolResult.Content,
-			})
+			history = append(history, NewOAIToolResultMessage(tc.id, toolResult.Content))
 		}
 	}
 
@@ -234,39 +201,7 @@ func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Messag
 	}
 }
 
-// buildGrokMessage creates a message with optional images (OpenAI format)
-func buildGrokMessage(msg Message) map[string]interface{} {
-	if len(msg.Images) == 0 {
-		return map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		}
-	}
-
-	content := make([]map[string]interface{}, 0, len(msg.Images)+1)
-
-	for _, img := range msg.Images {
-		dataURL := fmt.Sprintf("data:%s;base64,%s", img.MediaType, base64.StdEncoding.EncodeToString(img.Data))
-		content = append(content, map[string]interface{}{
-			"type": "image_url",
-			"image_url": map[string]interface{}{
-				"url": dataURL,
-			},
-		})
-	}
-
-	if msg.Content != "" {
-		content = append(content, map[string]interface{}{
-			"type": "text",
-			"text": msg.Content,
-		})
-	}
-
-	return map[string]interface{}{
-		"role":    msg.Role,
-		"content": content,
-	}
-}
+// buildGrokMessage is no longer needed — using OAIMessage + BuildOAIImageParts directly.
 
 type grokStreamResult struct {
 	content      string
@@ -282,7 +217,7 @@ type grokToolCall struct {
 	rawArgs string
 }
 
-func (p *GrokProvider) streamRequest(ctx context.Context, body map[string]interface{}, apiKey string, eventChan chan<- StreamEvent) (*grokStreamResult, error) {
+func (p *GrokProvider) streamRequest(ctx context.Context, body interface{}, apiKey string, eventChan chan<- StreamEvent) (*grokStreamResult, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err

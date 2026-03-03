@@ -46,23 +46,19 @@ func (p *OllamaProvider) Stream(ctx context.Context, messages []Message, toolDef
 			return
 		}
 
-		// Convert Poly messages to Ollama messages
-		ollamaMessages := make([]map[string]interface{}, 0, len(messages))
+		// Convert Poly messages to Ollama messages (OpenAI-compatible format)
+		ollamaMessages := make([]OAIMessage, 0, len(messages))
 		for _, msg := range messages {
-			// Skip system messages for now, handle them separately if needed
 			if msg.Role == "system" {
 				continue
 			}
-			ollamaMessages = append(ollamaMessages, map[string]interface{}{
-				"role":    msg.Role,
-				"content": msg.Content,
-			})
+			ollamaMessages = append(ollamaMessages, NewOAITextMessage(msg.Role, msg.Content))
 		}
 
-		body := map[string]interface{}{
-			"model":    p.GetModel(),
-			"messages": ollamaMessages,
-			"stream":   true,
+		body := OAIRequestBody{
+			Model:    p.GetModel(),
+			Stream:   true,
+			Messages: ollamaMessages,
 		}
 
 		jsonBody, err := json.Marshal(body)

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,56 +88,40 @@ func (p *GPTProvider) Stream(ctx context.Context, messages []Message, toolDefs [
 }
 
 func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, apiKey string, eventChan chan<- StreamEvent, role string, thinkingMode bool) {
-	// Build conversation history
-	conversationHistory := make([]map[string]interface{}, 0, len(initialMessages)+1)
+	// Build conversation history with typed structs
+	history := make([]OAIMessage, 0, len(initialMessages)+1)
 
 	// System message with dynamic prompt
-	conversationHistory = append(conversationHistory, map[string]interface{}{
-		"role":    "system",
-		"content": BuildSystemPrompt("gpt", role),
-	})
+	history = append(history, NewOAITextMessage("system", BuildSystemPrompt("gpt", role)))
 
 	// Add initial messages with image support
 	for _, msg := range initialMessages {
-		conversationHistory = append(conversationHistory, buildGPTMessage(msg))
+		history = append(history, buildGPTMessage(msg))
 	}
 
-	// Build tools array (OpenAI format)
-	var openaiTools []map[string]interface{}
-	if len(toolDefs) > 0 {
-		openaiTools = make([]map[string]interface{}, len(toolDefs))
-		for i, tool := range toolDefs {
-			openaiTools[i] = map[string]interface{}{
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":        tool.Name,
-					"description": tool.Description,
-					"parameters":  tool.InputSchema,
-				},
-			}
-		}
-	}
+	// Convert tool definitions to OpenAI format
+	oaiTools := OAIToolDefsFromPoly(toolDefs)
 
 	// Agentic loop
 	var fullContent strings.Builder
 
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := map[string]interface{}{
-			"model":          p.config.Model,
-			"stream":         true,
-			"messages":       conversationHistory,
-			"stream_options": map[string]interface{}{"include_usage": true},
+		body := OAIRequestBody{
+			Model:         p.config.Model,
+			Stream:        true,
+			Messages:      history,
+			StreamOptions: &OAIStreamOptions{IncludeUsage: true},
 		}
 
 		if thinkingMode && isReasoningModel(p.config.Model) {
-			body["reasoning_effort"] = "high"
-			body["max_completion_tokens"] = p.config.MaxTokens
+			body.ReasoningEffort = "high"
+			body.MaxCompletionTokens = p.config.MaxTokens
 		} else {
-			body["max_tokens"] = p.config.MaxTokens
+			body.MaxTokens = p.config.MaxTokens
 		}
 
-		if len(openaiTools) > 0 {
-			body["tools"] = openaiTools
+		if len(oaiTools) > 0 {
+			body.Tools = oaiTools
 		}
 
 		if thinkingMode && isReasoningModel(p.config.Model) {
@@ -169,28 +152,19 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 		}
 
 		// Build assistant message with tool_calls
-		assistantMsg := map[string]interface{}{
-			"role": "assistant",
-		}
-		if result.content != "" {
-			assistantMsg["content"] = result.content
-		}
-
-		// OpenAI format for tool_calls
-		toolCallsForMsg := make([]map[string]interface{}, len(result.toolCalls))
+		oaiToolCalls := make([]OAIToolCallMsg, len(result.toolCalls))
 		for i, tc := range result.toolCalls {
 			argsJSON, _ := json.Marshal(tc.input)
-			toolCallsForMsg[i] = map[string]interface{}{
-				"id":   tc.id,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":      tc.name,
-					"arguments": string(argsJSON),
+			oaiToolCalls[i] = OAIToolCallMsg{
+				ID:   tc.id,
+				Type: "function",
+				Function: OAIToolCallFunc{
+					Name:      tc.name,
+					Arguments: string(argsJSON),
 				},
 			}
 		}
-		assistantMsg["tool_calls"] = toolCallsForMsg
-		conversationHistory = append(conversationHistory, assistantMsg)
+		history = append(history, NewOAIAssistantMessage(result.content, oaiToolCalls))
 
 		// Execute tools and add results
 		for _, tc := range result.toolCalls {
@@ -221,12 +195,7 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 				},
 			}
 
-			// OpenAI format for tool results
-			conversationHistory = append(conversationHistory, map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": tc.id,
-				"content":      toolResult.Content,
-			})
+			history = append(history, NewOAIToolResultMessage(tc.id, toolResult.Content))
 		}
 	}
 
@@ -245,36 +214,10 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 }
 
 // buildGPTMessage creates a message with optional images (OpenAI format)
-func buildGPTMessage(msg Message) map[string]interface{} {
-	if len(msg.Images) == 0 {
-		return map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		}
-	}
-
-	content := make([]map[string]interface{}, 0, len(msg.Images)+1)
-
-	for _, img := range msg.Images {
-		dataURL := fmt.Sprintf("data:%s;base64,%s", img.MediaType, base64.StdEncoding.EncodeToString(img.Data))
-		content = append(content, map[string]interface{}{
-			"type": "image_url",
-			"image_url": map[string]interface{}{
-				"url": dataURL,
-			},
-		})
-	}
-
-	if msg.Content != "" {
-		content = append(content, map[string]interface{}{
-			"type": "text",
-			"text": msg.Content,
-		})
-	}
-
-	return map[string]interface{}{
-		"role":    msg.Role,
-		"content": content,
+func buildGPTMessage(msg Message) OAIMessage {
+	return OAIMessage{
+		Role:    msg.Role,
+		Content: BuildOAIImageParts(msg),
 	}
 }
 
@@ -296,7 +239,7 @@ func isReasoningModel(model string) bool {
 	return strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
 }
 
-func (p *GPTProvider) streamRequest(ctx context.Context, body map[string]interface{}, apiKey string, eventChan chan<- StreamEvent) (*gptStreamResult, error) {
+func (p *GPTProvider) streamRequest(ctx context.Context, body interface{}, apiKey string, eventChan chan<- StreamEvent) (*gptStreamResult, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
