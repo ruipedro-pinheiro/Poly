@@ -22,12 +22,9 @@ const (
 	mcpToolPrefix = "mcp_"
 )
 
-func init() {
-	RegisterProvider(NewAnthropicProvider(ProviderConfig{}))
-}
-
 type AnthropicProvider struct {
-	config ProviderConfig
+	config     ProviderConfig
+	httpClient *http.Client
 }
 
 func NewAnthropicProvider(cfg ProviderConfig) *AnthropicProvider {
@@ -37,7 +34,7 @@ func NewAnthropicProvider(cfg ProviderConfig) *AnthropicProvider {
 	if cfg.MaxTokens == 0 {
 		cfg.MaxTokens = GetProviderMaxTokens("claude")
 	}
-	return &AnthropicProvider{config: cfg}
+	return &AnthropicProvider{config: cfg, httpClient: newStreamHTTPClient()}
 }
 
 func (p *AnthropicProvider) Name() string           { return "claude" }
@@ -398,8 +395,7 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body map[string]i
 			req.Header.Set("anthropic-beta", betaFeatures)
 		}
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err = client.Do(req)
+		resp, err = p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue

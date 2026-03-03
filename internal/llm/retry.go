@@ -26,10 +26,11 @@ func ShouldRetry(statusCode int) bool {
 // Jitter prevents thundering herd when multiple streams are rate-limited simultaneously.
 func RetryDelay(attempt int) time.Duration {
 	delay := float64(BaseDelay) * math.Pow(2, float64(attempt))
+	// Add 0-50% random jitter before capping to ensure result never exceeds MaxDelay
+	jitter := delay * 0.5 * rand.Float64()
+	delay += jitter
 	if delay > float64(MaxDelay) {
 		delay = float64(MaxDelay)
 	}
-	// Add 0-50% random jitter
-	jitter := delay * 0.5 * rand.Float64()
-	return time.Duration(delay + jitter)
+	return time.Duration(delay)
 }

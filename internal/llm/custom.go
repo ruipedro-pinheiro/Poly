@@ -31,7 +31,8 @@ type CustomProviderConfig struct {
 
 // CustomProvider implements Provider for user-defined APIs
 type CustomProvider struct {
-	config CustomProviderConfig
+	config     CustomProviderConfig
+	httpClient *http.Client
 }
 
 // NewCustomProvider creates a custom provider from config
@@ -48,7 +49,7 @@ func NewCustomProvider(cfg CustomProviderConfig) *CustomProvider {
 	if cfg.Color == "" {
 		cfg.Color = "#888888"
 	}
-	return &CustomProvider{config: cfg}
+	return &CustomProvider{config: cfg, httpClient: newStreamHTTPClient()}
 }
 
 func (p *CustomProvider) Name() string        { return p.config.ID }
@@ -495,8 +496,7 @@ func (p *CustomProvider) doRequest(ctx context.Context, body map[string]interfac
 			}
 		}
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err := client.Do(req)
+		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue

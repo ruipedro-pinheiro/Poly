@@ -18,11 +18,6 @@ func getConfig() *config.Config {
 // PolySystemPrompt is a lazy-loaded default prompt for backward compatibility
 var PolySystemPrompt string
 
-func init() {
-	// Defer so config and tools can initialize first
-	// Will be set on first call to GetDefaultSystemPrompt()
-}
-
 // GetDefaultSystemPrompt returns the default system prompt (lazy init)
 func GetDefaultSystemPrompt() string {
 	if PolySystemPrompt == "" {

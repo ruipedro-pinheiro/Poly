@@ -140,7 +140,10 @@ func TestAddMessage(t *testing.T) {
 		t.Fatalf("AddMessage() error: %v", err)
 	}
 
-	msgs := GetMessages()
+	// Verify through internal state since GetMessages was removed (dead code)
+	sessionMu.Lock()
+	msgs := currentSession.Messages
+	sessionMu.Unlock()
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
@@ -201,16 +204,6 @@ func TestClear_CreatesNewSession(t *testing.T) {
 	}
 	if len(currentSession.Messages) != 0 {
 		t.Errorf("expected 0 messages after clear, got %d", len(currentSession.Messages))
-	}
-}
-
-func TestSetProvider_And_GetProvider(t *testing.T) {
-	setupTestDir(t)
-	Load()
-
-	SetProvider("gemini")
-	if GetProvider() != "gemini" {
-		t.Errorf("expected provider 'gemini', got %q", GetProvider())
 	}
 }
 
@@ -338,21 +331,6 @@ func TestForkSession(t *testing.T) {
 	}
 }
 
-func TestRenameSession(t *testing.T) {
-	setupTestDir(t)
-
-	Load()
-	id := currentSession.ID
-
-	err := RenameSession(id, "New Title")
-	if err != nil {
-		t.Fatalf("RenameSession() error: %v", err)
-	}
-	if currentSession.Title != "New Title" {
-		t.Errorf("expected title 'New Title', got %q", currentSession.Title)
-	}
-}
-
 func TestSaveNilSession(t *testing.T) {
 	setupTestDir(t)
 	currentSession = nil
@@ -375,9 +353,12 @@ func TestSetMessages(t *testing.T) {
 		t.Fatalf("SetMessages() error: %v", err)
 	}
 
-	got := GetMessages()
-	if len(got) != 2 {
-		t.Errorf("expected 2 messages, got %d", len(got))
+	// Verify through internal state since GetMessages was removed (dead code)
+	sessionMu.Lock()
+	got := len(currentSession.Messages)
+	sessionMu.Unlock()
+	if got != 2 {
+		t.Errorf("expected 2 messages, got %d", got)
 	}
 }
 

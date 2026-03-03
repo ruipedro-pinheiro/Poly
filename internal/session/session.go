@@ -150,19 +150,6 @@ func AddMessage(msg Message) error {
 	return saveLocked()
 }
 
-// GetMessages returns all messages in the current session
-func GetMessages() []Message {
-	sessionMu.Lock()
-	defer sessionMu.Unlock()
-	if currentSession == nil {
-		loadLocked()
-	}
-	// Return a copy to avoid races on the slice
-	msgs := make([]Message, len(currentSession.Messages))
-	copy(msgs, currentSession.Messages)
-	return msgs
-}
-
 // SetMessages replaces all messages in the current session and saves
 func SetMessages(msgs []Message) error {
 	sessionMu.Lock()
@@ -185,23 +172,6 @@ func Clear() error {
 		return err
 	}
 	return updateIndex()
-}
-
-// SetProvider sets the default provider
-func SetProvider(provider string) {
-	if currentSession == nil {
-		Load()
-	}
-	currentSession.Provider = provider
-	Save()
-}
-
-// GetProvider returns the default provider
-func GetProvider() string {
-	if currentSession == nil {
-		Load()
-	}
-	return currentSession.Provider
 }
 
 // ListSessions returns all sessions sorted by most recently updated
@@ -282,22 +252,6 @@ func DeleteSession(id string) error {
 		return saveIndex()
 	}
 	return nil
-}
-
-// RenameSession changes the title of a session
-func RenameSession(id, title string) error {
-	sess, err := loadSession(id)
-	if err != nil {
-		return err
-	}
-	sess.Title = title
-	if err := saveSession(sess); err != nil {
-		return err
-	}
-	if currentSession != nil && currentSession.ID == id {
-		currentSession.Title = title
-	}
-	return updateIndex()
 }
 
 // CurrentID returns the current session ID

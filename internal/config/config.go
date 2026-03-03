@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,15 +16,15 @@ type ProviderConfig struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	Endpoint      string            `json:"endpoint"`
-	Models        map[string]string `json:"models"`           // variant -> model name
+	Models        map[string]string `json:"models"` // variant -> model name
 	Color         string            `json:"color"`
 	MaxTokens     int               `json:"max_tokens"`
 	Timeout       int               `json:"timeout_seconds"`
-	Format        string            `json:"format"`           // "anthropic", "openai", "google"
-	AuthType      string            `json:"auth_type"`        // "api_key", "oauth", "none"
-	AuthHeader    string            `json:"auth_header"`      // "Bearer", "x-api-key", etc.
-	OAuthClientID string            `json:"oauth_client_id"`  // OAuth client ID for providers using OAuth
-	CostTier      int               `json:"cost_tier"`        // 1=cheap, 2=mid, 3=expensive (for @all cascade ordering)
+	Format        string            `json:"format"`          // "anthropic", "openai", "google"
+	AuthType      string            `json:"auth_type"`       // "api_key", "oauth", "none"
+	AuthHeader    string            `json:"auth_header"`     // "Bearer", "x-api-key", etc.
+	OAuthClientID string            `json:"oauth_client_id"` // OAuth client ID for providers using OAuth
+	CostTier      int               `json:"cost_tier"`       // 1=cheap, 2=mid, 3=expensive (for @all cascade ordering)
 }
 
 // MCPServerConfig defines an MCP server in the config file
@@ -63,9 +64,9 @@ type SettingsConfig struct {
 }
 
 var (
-	current            *Config
-	configMu           sync.RWMutex
-	configDir          string
+	current             *Config
+	configMu            sync.RWMutex
+	configDir           string
 	projectConfigLoaded bool
 )
 
@@ -92,7 +93,9 @@ func Load() (*Config, error) {
 	data, err := os.ReadFile(configFile)
 	if err == nil {
 		var userCfg Config
-		if err := json.Unmarshal(data, &userCfg); err == nil {
+		if err := json.Unmarshal(data, &userCfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: invalid JSON in %s: %v (using defaults)\n", configFile, err)
+		} else {
 			// Merge user config into defaults
 			cfg = mergeConfig(cfg, &userCfg)
 		}
@@ -142,27 +145,6 @@ func Save() error {
 	return os.WriteFile(filepath.Join(configDir, "config.json"), data, 0600)
 }
 
-// GetProvider returns a provider's config
-func GetProvider(id string) (ProviderConfig, bool) {
-	cfg := Get()
-	p, ok := cfg.Providers[id]
-	return p, ok
-}
-
-// GetProviderModel returns the model for a provider variant
-func GetProviderModel(providerID, variant string) string {
-	cfg := Get()
-	if p, ok := cfg.Providers[providerID]; ok {
-		if model, ok := p.Models[variant]; ok {
-			return model
-		}
-		if model, ok := p.Models["default"]; ok {
-			return model
-		}
-	}
-	return ""
-}
-
 // GetProviderColor returns a provider's color
 func GetProviderColor(providerID string) string {
 	cfg := Get()
@@ -190,16 +172,6 @@ func GetProviderNames() []string {
 }
 
 // SetProvider adds or updates a provider config
-func SetProvider(p ProviderConfig) {
-	configMu.Lock()
-	defer configMu.Unlock()
-
-	if current == nil {
-		current = DefaultConfig()
-	}
-	current.Providers[p.ID] = p
-}
-
 // GetColorTheme returns the saved color theme name
 func GetColorTheme() string {
 	cfg := Get()
@@ -281,16 +253,6 @@ func GetMCPServers() map[string]MCPServerConfig {
 		return nil
 	}
 	return cfg.MCPServers
-}
-
-// DeleteProvider removes a provider
-func DeleteProvider(id string) {
-	configMu.Lock()
-	defer configMu.Unlock()
-
-	if current != nil {
-		delete(current.Providers, id)
-	}
 }
 
 // mergeConfig merges user config into defaults
@@ -428,7 +390,8 @@ func loadProjectConfig(cfg *Config) {
 	}
 	var projectCfg Config
 	if err := json.Unmarshal(data, &projectCfg); err != nil {
-		return // invalid JSON, skip
+		fmt.Fprintf(os.Stderr, "warning: invalid JSON in %s: %v (skipping project config)\n", path, err)
+		return // invalid JSON, warn and skip
 	}
 	mergeConfig(cfg, &projectCfg)
 	projectConfigLoaded = true
@@ -521,8 +484,8 @@ func DefaultConfig() *Config {
 				Color:     "#FFFFFF",
 				CostTier:  0, // Local, so it's free
 				Models: map[string]string{
-					"default": "llama3",
-					"llama3": "llama3",
+					"default":   "llama3",
+					"llama3":    "llama3",
 					"codellama": "codellama",
 				},
 			},

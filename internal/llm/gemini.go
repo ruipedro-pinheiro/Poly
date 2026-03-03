@@ -33,12 +33,9 @@ var (
 	codeAssistResolved   bool
 )
 
-func init() {
-	RegisterProvider(NewGeminiProvider(ProviderConfig{}))
-}
-
 type GeminiProvider struct {
-	config ProviderConfig
+	config     ProviderConfig
+	httpClient *http.Client
 }
 
 func NewGeminiProvider(cfg ProviderConfig) *GeminiProvider {
@@ -48,7 +45,7 @@ func NewGeminiProvider(cfg ProviderConfig) *GeminiProvider {
 	if cfg.MaxTokens == 0 {
 		cfg.MaxTokens = GetProviderMaxTokens("gemini")
 	}
-	return &GeminiProvider{config: cfg}
+	return &GeminiProvider{config: cfg, httpClient: newStreamHTTPClient()}
 }
 
 func (p *GeminiProvider) Name() string           { return "gemini" }
@@ -326,8 +323,7 @@ func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body map[st
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err = client.Do(req)
+		resp, err = p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue
@@ -446,7 +442,7 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 	}
 
 	model := p.config.Model
-	if model == "" || model == DefaultModels["gemini"] {
+	if model == "" || model == GetDefaultModels()["gemini"] {
 		model = defaultCodeAssistModel
 	}
 
@@ -626,8 +622,7 @@ func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body map[s
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err = client.Do(req)
+		resp, err = p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue

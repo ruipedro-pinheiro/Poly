@@ -99,45 +99,6 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
-func TestGetProvider(t *testing.T) {
-	tmpDir := t.TempDir()
-	configDir = tmpDir
-	Load()
-
-	// Test existing provider
-	p, ok := GetProvider("claude")
-	if !ok {
-		t.Error("Expected to find claude provider")
-	}
-	if p.ID != "claude" {
-		t.Errorf("Expected provider ID=claude, got %s", p.ID)
-	}
-
-	// Test non-existent provider
-	_, ok = GetProvider("nonexistent")
-	if ok {
-		t.Error("Expected to not find nonexistent provider")
-	}
-}
-
-func TestGetProviderModel(t *testing.T) {
-	tmpDir := t.TempDir()
-	configDir = tmpDir
-	Load()
-
-	// Test getting default model
-	model := GetProviderModel("claude", "default")
-	if model == "" {
-		t.Error("Expected claude to have a default model")
-	}
-
-	// Test non-existent provider
-	model = GetProviderModel("nonexistent", "default")
-	if model != "" {
-		t.Errorf("Expected empty string for nonexistent provider, got %s", model)
-	}
-}
-
 func TestSaveConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir = tmpDir
@@ -338,60 +299,6 @@ func TestGetProviderColor(t *testing.T) {
 	}
 }
 
-func TestSetProvider_AddNew(t *testing.T) {
-	tmpDir := t.TempDir()
-	configDir = tmpDir
-	Load()
-
-	p := ProviderConfig{
-		ID:       "custom-ai",
-		Name:     "Custom AI",
-		Format:   "openai",
-		AuthType: "api_key",
-		Endpoint: "https://api.custom.ai/v1",
-	}
-	SetProvider(p)
-
-	got, ok := GetProvider("custom-ai")
-	if !ok {
-		t.Fatal("expected to find custom-ai provider")
-	}
-	if got.Name != "Custom AI" {
-		t.Errorf("expected name 'Custom AI', got %q", got.Name)
-	}
-}
-
-func TestDeleteProvider(t *testing.T) {
-	tmpDir := t.TempDir()
-	configDir = tmpDir
-	Load()
-
-	// Should have claude
-	_, ok := GetProvider("claude")
-	if !ok {
-		t.Fatal("expected claude provider")
-	}
-
-	DeleteProvider("claude")
-	_, ok = GetProvider("claude")
-	if ok {
-		t.Error("expected claude to be deleted")
-	}
-}
-
-func TestGetProviderModel_FallbackDefault(t *testing.T) {
-	tmpDir := t.TempDir()
-	configDir = tmpDir
-	Load()
-
-	// Asking for a variant that doesn't exist falls back to "default"
-	model := GetProviderModel("claude", "nonexistent-variant")
-	defaultModel := GetProviderModel("claude", "default")
-	if model != defaultModel {
-		t.Errorf("expected fallback to default model %q, got %q", defaultModel, model)
-	}
-}
-
 func TestLoadHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir = tmpDir
@@ -558,4 +465,3 @@ func TestGetMCPServers_Empty(t *testing.T) {
 		t.Errorf("expected nil MCP servers by default, got %v", servers)
 	}
 }
-

@@ -39,34 +39,43 @@ func TestRetryDelay(t *testing.T) {
 	tests := []struct {
 		name    string
 		attempt int
-		want    time.Duration
+		minWant time.Duration // base delay (without jitter)
+		maxWant time.Duration // base + 50% jitter, capped at MaxDelay
 	}{
-		{"attempt 0 - 1s", 0, 1 * time.Second},
-		{"attempt 1 - 2s", 1, 2 * time.Second},
-		{"attempt 2 - 4s", 2, 4 * time.Second},
-		{"attempt 3 - 8s", 3, 8 * time.Second},
-		{"attempt 5 - capped at 30s", 5, 30 * time.Second},
-		{"attempt 10 - capped at 30s", 10, 30 * time.Second},
+		{"attempt 0 - ~1s", 0, 1 * time.Second, 1500 * time.Millisecond},
+		{"attempt 1 - ~2s", 1, 2 * time.Second, 3 * time.Second},
+		{"attempt 2 - ~4s", 2, 4 * time.Second, 6 * time.Second},
+		{"attempt 3 - ~8s", 3, 8 * time.Second, 12 * time.Second},
+		{"attempt 5 - capped at 30s", 5, 20 * time.Second, 30 * time.Second},
+		{"attempt 10 - capped at 30s", 10, 20 * time.Second, 30 * time.Second},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := RetryDelay(tt.attempt)
-			if got != tt.want {
-				t.Errorf("RetryDelay(%d) = %v, want %v", tt.attempt, got, tt.want)
+			if got < tt.minWant || got > tt.maxWant {
+				t.Errorf("RetryDelay(%d) = %v, want between %v and %v", tt.attempt, got, tt.minWant, tt.maxWant)
 			}
 		})
 	}
 }
 
-func TestRetryDelayMonotonicallyIncreases(t *testing.T) {
-	prev := RetryDelay(0)
-	for i := 1; i < 5; i++ {
-		curr := RetryDelay(i)
-		if curr < prev {
-			t.Errorf("RetryDelay(%d) = %v < RetryDelay(%d) = %v, expected monotonic increase", i, curr, i-1, prev)
+func TestRetryDelayGenerallyIncreases(t *testing.T) {
+	// With jitter, individual calls may not be strictly monotonic.
+	// Instead, verify that the average over multiple samples increases.
+	const samples = 50
+	averages := make([]float64, 6)
+	for attempt := 0; attempt < 6; attempt++ {
+		var total time.Duration
+		for i := 0; i < samples; i++ {
+			total += RetryDelay(attempt)
 		}
-		prev = curr
+		averages[attempt] = float64(total) / float64(samples)
+	}
+	for i := 1; i < 5; i++ {
+		if averages[i] < averages[i-1] {
+			t.Errorf("Average RetryDelay(%d) = %.0fns < average RetryDelay(%d) = %.0fns", i, averages[i], i-1, averages[i-1])
+		}
 	}
 }
 

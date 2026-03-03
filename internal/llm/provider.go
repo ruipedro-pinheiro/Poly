@@ -2,12 +2,27 @@ package llm
 
 import (
 	"context"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pedromelo/poly/internal/config"
 )
+
+// newStreamHTTPClient creates a shared HTTP client for streaming LLM requests.
+// Reuse this across requests to benefit from connection pooling and TLS caching.
+func newStreamHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 5 * time.Minute,
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+}
 
 // ToolFormat defines how a provider expects tool definitions
 type ToolFormat string
@@ -55,15 +70,15 @@ type Response struct {
 	Model               string
 	InputTokens         int
 	OutputTokens        int
-	CacheCreationTokens int // Anthropic: tokens written to cache
-	CacheReadTokens     int // Anthropic: tokens read from cache
+	CacheCreationTokens int        // Anthropic: tokens written to cache
+	CacheReadTokens     int        // Anthropic: tokens read from cache
 	ToolCalls           []ToolCall // Tools the LLM wants to call
 	StopReason          string     // "end_turn", "tool_use", etc.
 }
 
 // StreamEvent represents a streaming event
 type StreamEvent struct {
-	Type       string      // "content", "thinking", "tool_use", "tool_result", "done", "error"
+	Type       string // "content", "thinking", "tool_use", "tool_result", "done", "error"
 	Content    string
 	Thinking   string
 	ToolCall   *ToolCall
@@ -233,10 +248,20 @@ func GetProviderNames() []string {
 	return result
 }
 
-// DefaultModels returns defaults from config (for backwards compatibility)
-var DefaultModels = defaultModelsFromConfig()
+// RegisterAllProviders registers all built-in providers into the registry.
+// Must be called explicitly from main() after config.Load() to ensure
+// providers are constructed with the user's actual config.
+func RegisterAllProviders() {
+	RegisterProvider(NewAnthropicProvider(ProviderConfig{}))
+	RegisterProvider(NewGPTProvider(ProviderConfig{}))
+	RegisterProvider(NewGeminiProvider(ProviderConfig{}))
+	RegisterProvider(NewGrokProvider(ProviderConfig{}))
+	RegisterProvider(NewOllamaProvider(ProviderConfig{}))
+}
 
-func defaultModelsFromConfig() map[string]string {
+// GetDefaultModels returns defaults from config, recalculated on each call
+// to reflect config changes at runtime.
+func GetDefaultModels() map[string]string {
 	result := make(map[string]string)
 	cfg := config.Get()
 	for id, p := range cfg.Providers {

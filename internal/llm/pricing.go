@@ -1,10 +1,22 @@
 package llm
 
+import (
+	"fmt"
+	"os"
+	"sync"
+)
+
 // ModelPricing holds input/output cost per 1M tokens
 type ModelPricing struct {
 	Input  float64 // $ per 1M input tokens
 	Output float64 // $ per 1M output tokens
 }
+
+// pricingWarnOnce tracks models we've already warned about to avoid log spam
+var (
+	pricingWarnedModels   = make(map[string]bool)
+	pricingWarnedModelsMu sync.Mutex
+)
 
 // pricingTable maps model prefixes to pricing
 // Source: provider pricing pages as of Jan 2026
@@ -91,6 +103,12 @@ func lookupPricing(model string) ModelPricing {
 		}
 	}
 
-	// Default fallback
+	// Default fallback — warn once per model so misconfiguration is visible
+	pricingWarnedModelsMu.Lock()
+	if !pricingWarnedModels[model] {
+		pricingWarnedModels[model] = true
+		fmt.Fprintf(os.Stderr, "warning: no pricing data for model %q, using fallback ($2.0/$8.0 per 1M tokens)\n", model)
+	}
+	pricingWarnedModelsMu.Unlock()
 	return ModelPricing{2.0, 8.0}
 }

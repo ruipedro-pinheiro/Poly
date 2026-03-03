@@ -17,13 +17,10 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-func init() {
-	RegisterProvider(NewGPTProvider(ProviderConfig{}))
-}
-
 // GPTProvider implements Provider for OpenAI's GPT models
 type GPTProvider struct {
-	config ProviderConfig
+	config     ProviderConfig
+	httpClient *http.Client
 }
 
 // NewGPTProvider creates a new GPT provider
@@ -36,7 +33,8 @@ func NewGPTProvider(cfg ProviderConfig) *GPTProvider {
 	}
 
 	return &GPTProvider{
-		config: cfg,
+		config:     cfg,
+		httpClient: newStreamHTTPClient(),
 	}
 }
 
@@ -326,8 +324,7 @@ func (p *GPTProvider) streamRequest(ctx context.Context, body map[string]interfa
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err = client.Do(req)
+		resp, err = p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue

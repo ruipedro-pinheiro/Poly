@@ -17,13 +17,10 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-func init() {
-	RegisterProvider(NewGrokProvider(ProviderConfig{}))
-}
-
 // GrokProvider implements Provider for xAI's Grok
 type GrokProvider struct {
-	config ProviderConfig
+	config     ProviderConfig
+	httpClient *http.Client
 }
 
 // NewGrokProvider creates a new Grok provider
@@ -36,7 +33,8 @@ func NewGrokProvider(cfg ProviderConfig) *GrokProvider {
 	}
 
 	return &GrokProvider{
-		config: cfg,
+		config:     cfg,
+		httpClient: newStreamHTTPClient(),
 	}
 }
 
@@ -312,8 +310,7 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body map[string]interf
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err = client.Do(req)
+		resp, err = p.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue

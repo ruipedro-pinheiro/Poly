@@ -62,6 +62,9 @@ func main() {
 	// Initialize tools
 	tools.Init()
 
+	// Register all built-in providers (after config.Load so they get actual user config)
+	llm.RegisterAllProviders()
+
 	// Load custom providers from ~/.poly/providers.json
 	llm.LoadCustomProviders()
 

@@ -9,15 +9,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 )
 
-func init() {
-	RegisterProvider(NewOllamaProvider(ProviderConfig{}))
-}
-
 type OllamaProvider struct {
-	config ProviderConfig
+	config     ProviderConfig
+	httpClient *http.Client
 }
 
 func NewOllamaProvider(cfg ProviderConfig) *OllamaProvider {
@@ -27,7 +23,7 @@ func NewOllamaProvider(cfg ProviderConfig) *OllamaProvider {
 	if cfg.MaxTokens == 0 {
 		cfg.MaxTokens = GetProviderMaxTokens("ollama")
 	}
-	return &OllamaProvider{config: cfg}
+	return &OllamaProvider{config: cfg, httpClient: newStreamHTTPClient()}
 }
 
 func (p *OllamaProvider) Name() string           { return "ollama" }
@@ -91,8 +87,7 @@ func (p *OllamaProvider) Stream(ctx context.Context, messages []Message, toolDef
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		client := &http.Client{Timeout: 5 * time.Minute}
-		resp, err := client.Do(req)
+		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			eventChan <- StreamEvent{Type: "error", Error: fmt.Errorf("failed to connect to ollama: %w", err)}
 			return

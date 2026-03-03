@@ -1,6 +1,9 @@
 package permission
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // Level represents a permission level
 type Level int
@@ -110,7 +113,8 @@ var bannedCommands = []string{
 func ClassifyBashCommand(command string) Level {
 	cmd := strings.TrimSpace(strings.ToLower(command))
 	for _, banned := range bannedCommands {
-		if strings.Contains(cmd, strings.ToLower(banned)) {
+		pattern := strings.ToLower(banned)
+		if containsBannedPattern(cmd, pattern) {
 			return Deny
 		}
 	}
@@ -120,4 +124,34 @@ func ClassifyBashCommand(command string) Level {
 		}
 	}
 	return Ask
+}
+
+// containsBannedPattern checks if cmd contains the banned pattern with word
+// boundary awareness. Single-word patterns (no spaces) require word boundaries
+// to avoid false positives like "halt" matching "asphalt". Multi-word patterns
+// use substring matching since they're specific enough on their own.
+func containsBannedPattern(cmd, pattern string) bool {
+	if !strings.Contains(cmd, pattern) {
+		return false
+	}
+	// Multi-word patterns are specific enough for substring matching
+	if strings.Contains(pattern, " ") || strings.Contains(pattern, "|") {
+		return true
+	}
+	// Single-word patterns need word boundary checking
+	idx := 0
+	for {
+		pos := strings.Index(cmd[idx:], pattern)
+		if pos == -1 {
+			return false
+		}
+		start := idx + pos
+		end := start + len(pattern)
+		leftOK := start == 0 || !unicode.IsLetter(rune(cmd[start-1]))
+		rightOK := end == len(cmd) || !unicode.IsLetter(rune(cmd[end]))
+		if leftOK && rightOK {
+			return true
+		}
+		idx = start + 1
+	}
 }
