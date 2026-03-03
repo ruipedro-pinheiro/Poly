@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pedromelo/poly/internal/config"
+	"github.com/pedromelo/poly/internal/types"
 )
 
 // newStreamHTTPClient creates a shared HTTP client for streaming LLM requests.
@@ -49,19 +50,11 @@ type Image struct {
 	Path      string `json:"path"`       // Original file path (for display)
 }
 
-// ToolCall represents a tool invocation from the LLM
-type ToolCall struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
-}
-
-// ToolResult represents the result of executing a tool
-type ToolResult struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
+// Type aliases — shared types live in internal/types to eliminate duplication
+// between tools and llm packages. Aliases preserve backward compatibility.
+type ToolCall = types.ToolCall
+type ToolResult = types.ToolResult
+type ToolDefinition = types.ToolDefinition
 
 // Response represents a complete response from a provider
 type Response struct {
@@ -85,13 +78,6 @@ type StreamEvent struct {
 	ToolResult *ToolResult // Result of a tool execution (paired with ToolCall)
 	Response   *Response
 	Error      error
-}
-
-// ToolDefinition for sending to LLMs
-type ToolDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"` // JSON Schema (Anthropic format)
 }
 
 // Provider interface for all LLM providers

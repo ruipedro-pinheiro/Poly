@@ -1,20 +1,17 @@
 package tools
 
-import "sync"
+import (
+	"sync"
 
-// ToolCall represents a tool invocation from an LLM
-type ToolCall struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
-}
+	"github.com/pedromelo/poly/internal/types"
+)
 
-// ToolResult represents the result of a tool execution
-type ToolResult struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
+// Type aliases — these were previously identical copies of the types in internal/types.
+// Using aliases preserves backward compatibility: existing code using tools.ToolCall
+// continues to work without changes.
+type ToolCall = types.ToolCall
+type ToolResult = types.ToolResult
+type ToolDefinition = types.ToolDefinition
 
 // Tool interface that all tools must implement
 type Tool interface {
@@ -24,15 +21,8 @@ type Tool interface {
 	Execute(args map[string]interface{}) ToolResult
 }
 
-// ToolDefinition for sending to LLMs (Anthropic format)
-type ToolDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"`
-}
-
 // SubStreamEvent represents a streaming event from a sub-provider.
-// Mirrors llm.StreamEvent without importing the llm package.
+// Subset of llm.StreamEvent — only the fields needed for sub-conversations.
 type SubStreamEvent struct {
 	Type       string // "content", "tool_use", "tool_result", "done", "error"
 	Content    string

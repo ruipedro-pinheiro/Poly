@@ -12,7 +12,7 @@ import (
 type LazySubProvider struct{}
 
 // SubStream implements tools.SubProvider.
-func (l *LazySubProvider) SubStream(systemPrompt string, messages []tools.SubMessage, toolDefs []tools.ToolDefinition) <-chan tools.SubStreamEvent {
+func (l *LazySubProvider) SubStream(systemPrompt string, messages []tools.SubMessage, toolDefs []ToolDefinition) <-chan tools.SubStreamEvent {
 	out := make(chan tools.SubStreamEvent, 64)
 
 	go func() {
@@ -28,7 +28,7 @@ func (l *LazySubProvider) SubStream(systemPrompt string, messages []tools.SubMes
 			return
 		}
 
-		// Convert tools.SubMessage -> llm.Message
+		// Convert tools.SubMessage -> llm.Message (SubMessage is a subset of Message)
 		llmMessages := make([]Message, 0, len(messages))
 		for i, msg := range messages {
 			content := msg.Content
@@ -41,31 +41,20 @@ func (l *LazySubProvider) SubStream(systemPrompt string, messages []tools.SubMes
 			})
 		}
 
-		// Convert tools.ToolDefinition -> llm.ToolDefinition
-		llmToolDefs := make([]ToolDefinition, len(toolDefs))
-		for i, td := range toolDefs {
-			llmToolDefs[i] = ToolDefinition{
-				Name:        td.Name,
-				Description: td.Description,
-				InputSchema: td.InputSchema,
-			}
-		}
+		// ToolDefinition is now a shared type alias — no conversion needed.
+		// tools.ToolCall and llm.ToolCall are the same type.
 
-		// Use Stream (all providers implement this, Send is not implemented)
-		events := provider.Stream(context.Background(), llmMessages, llmToolDefs)
+		events := provider.Stream(context.Background(), llmMessages, toolDefs)
 		for event := range events {
 			switch event.Type {
 			case "content":
 				out <- tools.SubStreamEvent{Type: "content", Content: event.Content}
 			case "tool_use":
 				if event.ToolCall != nil {
+					// Same underlying type — direct pointer assignment
 					out <- tools.SubStreamEvent{
-						Type: "tool_use",
-						ToolCall: &tools.ToolCall{
-							ID:        event.ToolCall.ID,
-							Name:      event.ToolCall.Name,
-							Arguments: event.ToolCall.Arguments,
-						},
+						Type:     "tool_use",
+						ToolCall: event.ToolCall,
 					}
 				}
 			case "error":
