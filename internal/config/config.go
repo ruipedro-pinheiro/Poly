@@ -510,6 +510,22 @@ func DefaultConfig() *Config {
 					"mini":    "grok-3-mini-beta",
 				},
 			},
+			"ollama": {
+				ID:        "ollama",
+				Name:      "Ollama",
+				Endpoint:  "http://localhost:11434/api",
+				Format:    "openai",
+				AuthType:  "none",
+				MaxTokens: 4096,
+				Timeout:   300,
+				Color:     "#FFFFFF",
+				CostTier:  0, // Local, so it's free
+				Models: map[string]string{
+					"default": "llama3",
+					"llama3": "llama3",
+					"codellama": "codellama",
+				},
+			},
 		},
 		Theme: ThemeConfig{
 			ProviderColors: map[string]string{},
