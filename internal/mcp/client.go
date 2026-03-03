@@ -299,9 +299,14 @@ func (c *Client) callLocked(method string, params interface{}) (json.RawMessage,
 }
 
 func (c *Client) sendNotificationLocked(method string, params interface{}) {
-	req := jsonRPCRequest{
+	// JSON-RPC 2.0: notifications MUST NOT have an "id" field
+	type notification struct {
+		JSONRPC string      `json:"jsonrpc"`
+		Method  string      `json:"method"`
+		Params  interface{} `json:"params,omitempty"`
+	}
+	req := notification{
 		JSONRPC: "2.0",
-		ID:      0,
 		Method:  method,
 		Params:  params,
 	}

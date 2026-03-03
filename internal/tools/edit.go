@@ -195,7 +195,7 @@ func tryLineMatch(content, oldString, newString, path, absPath string) (ToolResu
 		}
 	}
 
-	if bestScore < 0.8 || bestStart == -1 {
+	if bestScore < 0.9 || bestStart == -1 {
 		return ToolResult{}, false
 	}
 
@@ -359,4 +359,3 @@ func editDiffMsg(oldString, newString string) string {
 	}
 	return "same line count"
 }
-

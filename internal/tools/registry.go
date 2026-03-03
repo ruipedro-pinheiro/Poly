@@ -2,6 +2,7 @@ package tools
 
 import (
 	"sync"
+	"time"
 
 	"github.com/pedromelo/poly/internal/hooks"
 )
@@ -86,15 +87,32 @@ func Execute(name string, args map[string]interface{}) ToolResult {
 
 	// Check if tool needs approval before executing
 	if NeedsApproval(name, args) {
-		PendingChan <- PendingApproval{
+		pending := PendingApproval{
 			Name:    name,
 			Args:    args,
 			Summary: summarizeToolCall(name, args),
 		}
-		// Block until TUI sends approval decision
-		if !<-ApprovedChan {
+		// Send to TUI with timeout (prevents deadlock if TUI isn't listening)
+		select {
+		case PendingChan <- pending:
+		case <-time.After(30 * time.Second):
 			return ToolResult{
-				Content: "Tool execution denied by user",
+				Content: "Tool approval timed out (no TUI listener)",
+				IsError: true,
+			}
+		}
+		// Block until TUI sends approval decision (with timeout)
+		select {
+		case approved := <-ApprovedChan:
+			if !approved {
+				return ToolResult{
+					Content: "Tool execution denied by user",
+					IsError: true,
+				}
+			}
+		case <-time.After(5 * time.Minute):
+			return ToolResult{
+				Content: "Tool approval timed out (no response)",
 				IsError: true,
 			}
 		}

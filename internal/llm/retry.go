@@ -2,6 +2,7 @@ package llm
 
 import (
 	"math"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -21,11 +22,14 @@ func ShouldRetry(statusCode int) bool {
 		statusCode == http.StatusGatewayTimeout
 }
 
-// RetryDelay returns the delay before the next retry attempt using exponential backoff
+// RetryDelay returns the delay before the next retry attempt using exponential backoff with jitter.
+// Jitter prevents thundering herd when multiple streams are rate-limited simultaneously.
 func RetryDelay(attempt int) time.Duration {
 	delay := float64(BaseDelay) * math.Pow(2, float64(attempt))
 	if delay > float64(MaxDelay) {
 		delay = float64(MaxDelay)
 	}
-	return time.Duration(delay)
+	// Add 0-50% random jitter
+	jitter := delay * 0.5 * rand.Float64()
+	return time.Duration(delay + jitter)
 }

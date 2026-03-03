@@ -21,9 +21,9 @@ var (
 	runtimeOnce sync.Once
 
 	// imageReady tracks whether the image has been verified/pulled
-	imageReady     bool
-	imageReadyOnce sync.Once
-	imageErr       error
+	imageReady bool
+	imageMu    sync.Mutex
+	imageErr   error
 )
 
 // Detect returns "podman", "docker", or "" if neither is available.
@@ -52,39 +52,49 @@ func Available() bool {
 // EnsureImage checks if the sandbox image exists locally, pulls it if not.
 // Returns nil on success, error with clear instructions on failure.
 func EnsureImage() error {
-	imageReadyOnce.Do(func() {
-		rt := Detect()
-		if rt == "" {
-			imageErr = fmt.Errorf("no container runtime found (install podman or docker)")
-			return
-		}
+	imageMu.Lock()
+	defer imageMu.Unlock()
 
-		// Check if image exists locally
-		check := exec.Command(rt, "image", "inspect", Image)
-		if check.Run() == nil {
-			imageReady = true
-			return
-		}
+	// Already resolved
+	if imageReady {
+		return nil
+	}
+	if imageErr != nil {
+		return imageErr
+	}
 
-		// Try to pull
-		pull := exec.Command(rt, "pull", Image)
-		var stderr bytes.Buffer
-		pull.Stderr = &stderr
-		if err := pull.Run(); err != nil {
-			imageErr = fmt.Errorf(
-				"sandbox image '%s' not found locally and pull failed:\n%s\n\n"+
-					"Fix: run '%s pull %s' manually, or use 'make sandbox-setup'",
-				Image, strings.TrimSpace(stderr.String()), rt, Image)
-			return
-		}
+	rt := Detect()
+	if rt == "" {
+		imageErr = fmt.Errorf("no container runtime found (install podman or docker)")
+		return imageErr
+	}
+
+	// Check if image exists locally
+	check := exec.Command(rt, "image", "inspect", Image)
+	if check.Run() == nil {
 		imageReady = true
-	})
-	return imageErr
+		return nil
+	}
+
+	// Try to pull
+	pull := exec.Command(rt, "pull", Image)
+	var stderr bytes.Buffer
+	pull.Stderr = &stderr
+	if err := pull.Run(); err != nil {
+		imageErr = fmt.Errorf(
+			"sandbox image '%s' not found locally and pull failed:\n%s\n\n"+
+				"Fix: run '%s pull %s' manually, or use 'make sandbox-setup'",
+			Image, strings.TrimSpace(stderr.String()), rt, Image)
+		return imageErr
+	}
+	imageReady = true
+	return nil
 }
 
 // ResetImageCheck allows retrying the image check (e.g. after manual pull)
 func ResetImageCheck() {
-	imageReadyOnce = sync.Once{}
+	imageMu.Lock()
+	defer imageMu.Unlock()
 	imageReady = false
 	imageErr = nil
 }

@@ -1,5 +1,7 @@
 package tools
 
+import "sync"
+
 // ToolCall represents a tool invocation from an LLM
 type ToolCall struct {
 	ID        string                 `json:"id"`
@@ -32,7 +34,7 @@ type ToolDefinition struct {
 // SubStreamEvent represents a streaming event from a sub-provider.
 // Mirrors llm.StreamEvent without importing the llm package.
 type SubStreamEvent struct {
-	Type       string      // "content", "tool_use", "tool_result", "done", "error"
+	Type       string // "content", "tool_use", "tool_result", "done", "error"
 	Content    string
 	ToolCall   *ToolCall
 	ToolResult *ToolResult
@@ -54,14 +56,21 @@ type SubMessage struct {
 }
 
 // subProvider holds the injected SubProvider instance.
-var subProvider SubProvider
+var (
+	subProvider   SubProvider
+	subProviderMu sync.RWMutex
+)
 
 // SetSubProvider injects the sub-provider for delegate_task to use.
 func SetSubProvider(sp SubProvider) {
+	subProviderMu.Lock()
+	defer subProviderMu.Unlock()
 	subProvider = sp
 }
 
 // GetSubProvider returns the current sub-provider (may be nil).
 func GetSubProvider() SubProvider {
+	subProviderMu.RLock()
+	defer subProviderMu.RUnlock()
 	return subProvider
 }

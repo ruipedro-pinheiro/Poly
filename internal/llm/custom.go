@@ -18,15 +18,15 @@ import (
 
 // CustomProviderConfig defines a user-added provider
 type CustomProviderConfig struct {
-	Name        string `json:"name"`         // Display name (e.g., "Mistral")
-	ID          string `json:"id"`           // Unique ID (e.g., "mistral")
-	BaseURL     string `json:"base_url"`     // API endpoint (e.g., "https://api.mistral.ai/v1")
-	APIKey      string `json:"api_key"`      // API key
-	Model       string `json:"model"`        // Default model
-	Format      string `json:"format"`       // "openai", "anthropic", "google"
-	Color       string `json:"color"`        // Hex color for UI
-	MaxTokens   int    `json:"max_tokens"`
-	AuthHeader  string `json:"auth_header"`  // "Bearer" (default) or "x-api-key" etc.
+	Name       string `json:"name"`     // Display name (e.g., "Mistral")
+	ID         string `json:"id"`       // Unique ID (e.g., "mistral")
+	BaseURL    string `json:"base_url"` // API endpoint (e.g., "https://api.mistral.ai/v1")
+	APIKey     string `json:"api_key"`  // API key
+	Model      string `json:"model"`    // Default model
+	Format     string `json:"format"`   // "openai", "anthropic", "google"
+	Color      string `json:"color"`    // Hex color for UI
+	MaxTokens  int    `json:"max_tokens"`
+	AuthHeader string `json:"auth_header"` // "Bearer" (default) or "x-api-key" etc.
 }
 
 // CustomProvider implements Provider for user-defined APIs
@@ -522,6 +522,7 @@ func (p *CustomProvider) doRequest(ctx context.Context, body map[string]interfac
 
 func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 	result := &customStreamResult{}
 	toolCallsMap := make(map[int]*customToolCall)
 
@@ -606,6 +607,7 @@ func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<
 
 func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 	result := &customStreamResult{}
 	var currentToolCall *customToolCall
 	var currentToolInput strings.Builder
@@ -682,6 +684,7 @@ func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan ch
 
 func (p *CustomProvider) parseGoogleStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 	result := &customStreamResult{}
 
 	for scanner.Scan() {

@@ -17,7 +17,6 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-
 func init() {
 	RegisterProvider(NewGPTProvider(ProviderConfig{}))
 }
@@ -353,6 +352,7 @@ func (p *GPTProvider) streamRequest(ctx context.Context, body map[string]interfa
 	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
 	result := &gptStreamResult{}
 
 	// Track tool calls being built

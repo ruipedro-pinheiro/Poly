@@ -27,9 +27,10 @@ const (
 )
 
 var (
-	codeAssistProjectID   string
-	codeAssistProjectOnce sync.Once
-	codeAssistProjectErr  error
+	codeAssistProjectID  string
+	codeAssistProjectMu  sync.Mutex
+	codeAssistProjectErr error
+	codeAssistResolved   bool
 )
 
 func init() {
@@ -50,13 +51,13 @@ func NewGeminiProvider(cfg ProviderConfig) *GeminiProvider {
 	return &GeminiProvider{config: cfg}
 }
 
-func (p *GeminiProvider) Name() string        { return "gemini" }
-func (p *GeminiProvider) DisplayName() string { return "Gemini" }
-func (p *GeminiProvider) Color() string       { return "#4285F4" }
+func (p *GeminiProvider) Name() string           { return "gemini" }
+func (p *GeminiProvider) DisplayName() string    { return "Gemini" }
+func (p *GeminiProvider) Color() string          { return "#4285F4" }
 func (p *GeminiProvider) ToolFormat() ToolFormat { return ToolFormatGoogle }
 func (p *GeminiProvider) SetModel(model string)  { p.config.Model = model }
 func (p *GeminiProvider) GetModel() string       { return p.config.Model }
-func (p *GeminiProvider) SupportsTools() bool { return true }
+func (p *GeminiProvider) SupportsTools() bool    { return true }
 func (p *GeminiProvider) IsConfigured() bool     { return auth.GetStorage().IsConnected("gemini") }
 
 func (p *GeminiProvider) Stream(ctx context.Context, messages []Message, toolDefs []ToolDefinition, opts ...StreamOptions) <-chan StreamEvent {
@@ -200,12 +201,15 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 
 		// Execute functions and build response
 		functionResponses := make([]map[string]interface{}, 0, len(result.functionCalls))
-		for _, fc := range result.functionCalls {
+		for i, fc := range result.functionCalls {
+			// Generate unique ID per call to avoid collisions when the same tool is called multiple times
+			callID := fmt.Sprintf("%s_%d", fc.name, i)
+
 			// Emit tool_use event before execution
 			eventChan <- StreamEvent{
 				Type: "tool_use",
 				ToolCall: &ToolCall{
-					ID:        fc.name, // Gemini doesn't have IDs, use name
+					ID:        callID,
 					Name:      fc.name,
 					Arguments: fc.args,
 				},
@@ -217,12 +221,12 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 			eventChan <- StreamEvent{
 				Type: "tool_result",
 				ToolCall: &ToolCall{
-					ID:        fc.name,
+					ID:        callID,
 					Name:      fc.name,
 					Arguments: fc.args,
 				},
 				ToolResult: &ToolResult{
-					ToolUseID: fc.name,
+					ToolUseID: callID,
 					Content:   toolResult.Content,
 					IsError:   toolResult.IsError,
 				},
@@ -348,6 +352,7 @@ func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body map[st
 	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
 	result := &geminiStreamResult{}
 
 	for scanner.Scan() {
@@ -530,12 +535,15 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 
 		// Execute functions and build response
 		functionResponses := make([]map[string]interface{}, 0, len(result.functionCalls))
-		for _, fc := range result.functionCalls {
+		for i, fc := range result.functionCalls {
+			// Generate unique ID per call to avoid collisions when the same tool is called multiple times
+			callID := fmt.Sprintf("%s_%d", fc.name, i)
+
 			// Emit tool_use event before execution
 			eventChan <- StreamEvent{
 				Type: "tool_use",
 				ToolCall: &ToolCall{
-					ID:        fc.name,
+					ID:        callID,
 					Name:      fc.name,
 					Arguments: fc.args,
 				},
@@ -547,12 +555,12 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 			eventChan <- StreamEvent{
 				Type: "tool_result",
 				ToolCall: &ToolCall{
-					ID:        fc.name,
+					ID:        callID,
 					Name:      fc.name,
 					Arguments: fc.args,
 				},
 				ToolResult: &ToolResult{
-					ToolUseID: fc.name,
+					ToolUseID: callID,
 					Content:   toolResult.Content,
 					IsError:   toolResult.IsError,
 				},
@@ -649,6 +657,7 @@ func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body map[s
 // parseCodeAssistStreamWithTools parses Code Assist response including function calls
 func (p *GeminiProvider) parseCodeAssistStreamWithTools(body io.Reader, eventChan chan<- StreamEvent) (*geminiStreamResult, error) {
 	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
 	result := &geminiStreamResult{}
 	var sseBuffer []string
 	var sentText string
@@ -780,75 +789,81 @@ func extractCodeAssistContent(payload map[string]interface{}) (string, string, [
 }
 
 func (p *GeminiProvider) resolveCodeAssistProjectID(token string) (string, error) {
-	codeAssistProjectOnce.Do(func() {
-		envProject := os.Getenv("GOOGLE_CLOUD_PROJECT")
-		if envProject == "" {
-			envProject = os.Getenv("GOOGLE_CLOUD_PROJECT_ID")
-		}
-		if envProject == "" {
-			envProject = os.Getenv("GCLOUD_PROJECT")
-		}
+	codeAssistProjectMu.Lock()
+	defer codeAssistProjectMu.Unlock()
 
-		body := map[string]interface{}{
-			"cloudaicompanionProject": envProject,
-			"metadata": map[string]interface{}{
-				"ideType":     "IDE_UNSPECIFIED",
-				"platform":    "PLATFORM_UNSPECIFIED",
-				"pluginType":  "GEMINI",
-				"duetProject": envProject,
-			},
-		}
+	// Already resolved successfully
+	if codeAssistResolved {
+		return codeAssistProjectID, nil
+	}
+	// Reset previous transient error to allow retry
+	codeAssistProjectErr = nil
 
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
-			codeAssistProjectErr = fmt.Errorf("failed to marshal request: %w", err)
-			return
-		}
-		req, err := http.NewRequest("POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
-		if err != nil {
-			codeAssistProjectErr = fmt.Errorf("failed to create request: %w", err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+token)
+	envProject := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if envProject == "" {
+		envProject = os.Getenv("GOOGLE_CLOUD_PROJECT_ID")
+	}
+	if envProject == "" {
+		envProject = os.Getenv("GCLOUD_PROJECT")
+	}
 
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			codeAssistProjectErr = err
-			return
-		}
-		defer resp.Body.Close()
+	body := map[string]interface{}{
+		"cloudaicompanionProject": envProject,
+		"metadata": map[string]interface{}{
+			"ideType":     "IDE_UNSPECIFIED",
+			"platform":    "PLATFORM_UNSPECIFIED",
+			"pluginType":  "GEMINI",
+			"duetProject": envProject,
+		},
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			codeAssistProjectErr = fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, string(bodyBytes))
-			return
-		}
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			codeAssistProjectErr = fmt.Errorf("failed to decode response: %w", err)
-			return
-		}
-
-		if project, ok := result["cloudaicompanionProject"].(string); ok && project != "" {
-			codeAssistProjectID = project
-			return
-		}
-
-		if envProject != "" {
-			codeAssistProjectID = envProject
-			return
-		}
-
-		codeAssistProjectErr = errors.New("Code Assist requires GOOGLE_CLOUD_PROJECT environment variable")
-	})
-
-	if codeAssistProjectErr != nil {
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		codeAssistProjectErr = fmt.Errorf("failed to marshal request: %w", err)
 		return "", codeAssistProjectErr
 	}
-	return codeAssistProjectID, nil
+	req, err := http.NewRequest("POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
+	if err != nil {
+		codeAssistProjectErr = fmt.Errorf("failed to create request: %w", err)
+		return "", codeAssistProjectErr
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		codeAssistProjectErr = err
+		return "", codeAssistProjectErr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		codeAssistProjectErr = fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, string(bodyBytes))
+		return "", codeAssistProjectErr
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		codeAssistProjectErr = fmt.Errorf("failed to decode response: %w", err)
+		return "", codeAssistProjectErr
+	}
+
+	if project, ok := result["cloudaicompanionProject"].(string); ok && project != "" {
+		codeAssistProjectID = project
+		codeAssistResolved = true
+		return codeAssistProjectID, nil
+	}
+
+	if envProject != "" {
+		codeAssistProjectID = envProject
+		codeAssistResolved = true
+		return codeAssistProjectID, nil
+	}
+
+	codeAssistProjectErr = errors.New("Code Assist requires GOOGLE_CLOUD_PROJECT environment variable")
+	return "", codeAssistProjectErr
 }
 
 func generateUUID() string {

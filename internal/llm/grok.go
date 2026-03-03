@@ -17,7 +17,6 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 )
 
-
 func init() {
 	RegisterProvider(NewGrokProvider(ProviderConfig{}))
 }
@@ -339,6 +338,7 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body map[string]interf
 	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
 	result := &grokStreamResult{}
 
 	// Track tool calls being built

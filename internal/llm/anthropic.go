@@ -40,13 +40,13 @@ func NewAnthropicProvider(cfg ProviderConfig) *AnthropicProvider {
 	return &AnthropicProvider{config: cfg}
 }
 
-func (p *AnthropicProvider) Name() string        { return "claude" }
-func (p *AnthropicProvider) DisplayName() string { return "Claude" }
-func (p *AnthropicProvider) Color() string       { return "#D97706" }
+func (p *AnthropicProvider) Name() string           { return "claude" }
+func (p *AnthropicProvider) DisplayName() string    { return "Claude" }
+func (p *AnthropicProvider) Color() string          { return "#D97706" }
 func (p *AnthropicProvider) ToolFormat() ToolFormat { return ToolFormatAnthropic }
 func (p *AnthropicProvider) SetModel(model string)  { p.config.Model = model }
 func (p *AnthropicProvider) GetModel() string       { return p.config.Model }
-func (p *AnthropicProvider) SupportsTools() bool { return true }
+func (p *AnthropicProvider) SupportsTools() bool    { return true }
 
 func (p *AnthropicProvider) IsConfigured() bool {
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {
@@ -424,6 +424,7 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body map[string]i
 	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
 	result := &streamResult{}
 	var currentToolCall *toolCallInfo
 	var currentToolInput strings.Builder

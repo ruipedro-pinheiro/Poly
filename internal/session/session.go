@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -50,9 +51,12 @@ type SessionIndex struct {
 	Sessions []SessionEntry `json:"sessions"`
 }
 
-var sessionDir string
-var currentSession *Session
-var sessionIndex *SessionIndex
+var (
+	sessionDir     string
+	currentSession *Session
+	sessionIndex   *SessionIndex
+	sessionMu      sync.Mutex
+)
 
 func init() {
 	home, _ := os.UserHomeDir()
@@ -71,6 +75,12 @@ func GetSessionDir() string {
 
 // Load loads the current session from disk (auto-migrates old format)
 func Load() (*Session, error) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	return loadLocked()
+}
+
+func loadLocked() (*Session, error) {
 	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		return nil, err
 	}
@@ -98,6 +108,12 @@ func Load() (*Session, error) {
 
 // Save saves the current session to disk
 func Save() error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	return saveLocked()
+}
+
+func saveLocked() error {
 	if currentSession == nil {
 		return nil
 	}
@@ -110,8 +126,10 @@ func Save() error {
 
 // AddMessage adds a message to the current session and saves
 func AddMessage(msg Message) error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	if currentSession == nil {
-		Load()
+		loadLocked()
 	}
 	msg.Timestamp = time.Now()
 	currentSession.Messages = append(currentSession.Messages, msg)
@@ -129,24 +147,31 @@ func AddMessage(msg Message) error {
 		currentSession.Title = title
 	}
 
-	return Save()
+	return saveLocked()
 }
 
 // GetMessages returns all messages in the current session
 func GetMessages() []Message {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	if currentSession == nil {
-		Load()
+		loadLocked()
 	}
-	return currentSession.Messages
+	// Return a copy to avoid races on the slice
+	msgs := make([]Message, len(currentSession.Messages))
+	copy(msgs, currentSession.Messages)
+	return msgs
 }
 
 // SetMessages replaces all messages in the current session and saves
 func SetMessages(msgs []Message) error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	if currentSession == nil {
-		Load()
+		loadLocked()
 	}
 	currentSession.Messages = msgs
-	return Save()
+	return saveLocked()
 }
 
 // Clear creates a new session, preserving the old one in the index
