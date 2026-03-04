@@ -115,31 +115,27 @@ func (p *CustomProvider) agenticLoop(ctx context.Context, initialMessages []Mess
 
 func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
 	// Build conversation history
-	conversationHistory := make([]interface{}, 0, len(initialMessages)+1)
-	conversationHistory = append(conversationHistory, map[string]interface{}{
-		"role":    "system",
-		"content": BuildSystemPrompt(p.config.ID, role),
-	})
+	msgs := make([]OAIMessage, 0, len(initialMessages)+1)
+	msgs = append(msgs, NewOAITextMessage("system", BuildSystemPrompt(p.config.ID, role)))
 	for _, msg := range initialMessages {
-		conversationHistory = append(conversationHistory, map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		})
+		msgs = append(msgs, NewOAITextMessage(msg.Role, msg.Content))
 	}
 
+	oaiTools := OAIToolDefsFromPoly(toolDefs)
+
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := map[string]interface{}{
-			"model":    p.config.Model,
-			"stream":   true,
-			"messages": conversationHistory,
+		body := OAIRequestBody{
+			Model:    p.config.Model,
+			Stream:   true,
+			Messages: msgs,
+			Tools:    oaiTools,
 		}
 		if thinkingMode && isReasoningModel(p.config.Model) {
-			body["reasoning_effort"] = "high"
-			body["max_completion_tokens"] = p.config.MaxTokens
+			body.ReasoningEffort = "high"
+			body.MaxCompletionTokens = p.config.MaxTokens
 		} else {
-			body["max_tokens"] = p.config.MaxTokens
+			body.MaxTokens = p.config.MaxTokens
 		}
-		BuildRequestWithTools(body, toolDefs, ToolFormatOpenAI)
 
 		if thinkingMode && isReasoningModel(p.config.Model) {
 			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
@@ -169,24 +165,19 @@ func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages 
 		}
 
 		// Build assistant message with tool_calls
-		assistantMsg := map[string]interface{}{"role": "assistant"}
-		if result.content != "" {
-			assistantMsg["content"] = result.content
-		}
-		tcForMsg := make([]map[string]interface{}, len(result.toolCalls))
+		tcMsgs := make([]OAIToolCallMsg, len(result.toolCalls))
 		for i, tc := range result.toolCalls {
 			argsJSON, _ := json.Marshal(tc.input)
-			tcForMsg[i] = map[string]interface{}{
-				"id":   tc.id,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":      tc.name,
-					"arguments": string(argsJSON),
+			tcMsgs[i] = OAIToolCallMsg{
+				ID:   tc.id,
+				Type: "function",
+				Function: OAIToolCallFunc{
+					Name:      tc.name,
+					Arguments: string(argsJSON),
 				},
 			}
 		}
-		assistantMsg["tool_calls"] = tcForMsg
-		conversationHistory = append(conversationHistory, assistantMsg)
+		msgs = append(msgs, NewOAIAssistantMessage(result.content, tcMsgs))
 
 		// Execute tools
 		for _, tc := range result.toolCalls {
@@ -200,11 +191,7 @@ func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages 
 				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
 				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
 			}
-			conversationHistory = append(conversationHistory, map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": tc.id,
-				"content":      toolResult.Content,
-			})
+			msgs = append(msgs, NewOAIToolResultMessage(tc.id, toolResult.Content))
 		}
 	}
 
@@ -218,35 +205,32 @@ func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages 
 // --- Anthropic format agentic loop ---
 
 func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
-	conversationHistory := make([]interface{}, 0, len(initialMessages))
+	msgs := make([]AntMessage, 0, len(initialMessages))
 	for _, msg := range initialMessages {
-		conversationHistory = append(conversationHistory, map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		})
+		msgs = append(msgs, NewAntTextMessage(msg.Role, msg.Content))
 	}
 
+	antTools := AntToolDefsFromPoly(toolDefs, false)
+
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := map[string]interface{}{
-			"model":      p.config.Model,
-			"max_tokens": p.config.MaxTokens,
-			"stream":     true,
-			"messages":   conversationHistory,
-			"system":     BuildSystemPrompt(p.config.ID, role),
+		body := AntRequestBody{
+			Model:     p.config.Model,
+			MaxTokens: p.config.MaxTokens,
+			Stream:    true,
+			Messages:  msgs,
+			System:    BuildSystemPrompt(p.config.ID, role),
+			Tools:     antTools,
 		}
 		if thinkingMode {
 			budgetTokens := 10000
-			maxTokens := p.config.MaxTokens
-			if maxTokens <= budgetTokens {
-				maxTokens = budgetTokens + 4096
+			if body.MaxTokens <= budgetTokens {
+				body.MaxTokens = budgetTokens + 4096
 			}
-			body["max_tokens"] = maxTokens
-			body["thinking"] = map[string]interface{}{
-				"type":          "enabled",
-				"budget_tokens": budgetTokens,
+			body.Thinking = &AntThinkingConfig{
+				Type:         "enabled",
+				BudgetTokens: budgetTokens,
 			}
 		}
-		BuildRequestWithTools(body, toolDefs, ToolFormatAnthropic)
 
 		resp, err := p.doRequest(ctx, body, thinkingMode)
 		if err != nil {
@@ -272,28 +256,22 @@ func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessag
 		}
 
 		// Build assistant content blocks
-		assistantContent := make([]interface{}, 0)
+		assistantBlocks := make([]AntContentBlock, 0, len(result.toolCalls)+1)
 		if result.content != "" {
-			assistantContent = append(assistantContent, map[string]interface{}{
-				"type": "text",
-				"text": result.content,
-			})
+			assistantBlocks = append(assistantBlocks, AntContentBlock{Type: "text", Text: result.content})
 		}
 		for _, tc := range result.toolCalls {
-			assistantContent = append(assistantContent, map[string]interface{}{
-				"type":  "tool_use",
-				"id":    tc.id,
-				"name":  tc.name,
-				"input": tc.input,
+			assistantBlocks = append(assistantBlocks, AntContentBlock{
+				Type:  "tool_use",
+				ID:    tc.id,
+				Name:  tc.name,
+				Input: tc.input,
 			})
 		}
-		conversationHistory = append(conversationHistory, map[string]interface{}{
-			"role":    "assistant",
-			"content": assistantContent,
-		})
+		msgs = append(msgs, AntMessage{Role: "assistant", Content: assistantBlocks})
 
 		// Execute tools
-		toolResults := make([]interface{}, 0, len(result.toolCalls))
+		toolResultBlocks := make([]AntContentBlock, 0, len(result.toolCalls))
 		for _, tc := range result.toolCalls {
 			eventChan <- StreamEvent{
 				Type:     "tool_use",
@@ -305,17 +283,9 @@ func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessag
 				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
 				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
 			}
-			toolResults = append(toolResults, map[string]interface{}{
-				"type":        "tool_result",
-				"tool_use_id": tc.id,
-				"content":     toolResult.Content,
-				"is_error":    toolResult.IsError,
-			})
+			toolResultBlocks = append(toolResultBlocks, NewAntToolResultBlock(tc.id, toolResult.Content, toolResult.IsError))
 		}
-		conversationHistory = append(conversationHistory, map[string]interface{}{
-			"role":    "user",
-			"content": toolResults,
-		})
+		msgs = append(msgs, AntMessage{Role: "user", Content: toolResultBlocks})
 	}
 
 	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
@@ -328,43 +298,32 @@ func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessag
 // --- Google format agentic loop ---
 
 func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
-	contents := make([]interface{}, 0, len(initialMessages)+2)
+	contents := make([]GemContent, 0, len(initialMessages)+2)
 	contents = append(contents,
-		map[string]interface{}{
-			"role":  "user",
-			"parts": []map[string]string{{"text": BuildSystemPrompt(p.config.ID, role)}},
-		},
-		map[string]interface{}{
-			"role":  "model",
-			"parts": []map[string]string{{"text": "Understood."}},
-		},
+		GemContent{Role: "user", Parts: []GemPart{NewGemTextPart(BuildSystemPrompt(p.config.ID, role))}},
+		GemContent{Role: "model", Parts: []GemPart{NewGemTextPart("Understood.")}},
 	)
 	for _, msg := range initialMessages {
 		r := "user"
 		if msg.Role == "assistant" {
 			r = "model"
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  r,
-			"parts": []map[string]string{{"text": msg.Content}},
-		})
+		contents = append(contents, GemContent{Role: r, Parts: []GemPart{NewGemTextPart(msg.Content)}})
 	}
 
-	genConfig := map[string]interface{}{
-		"maxOutputTokens": p.config.MaxTokens,
-	}
+	genConfig := &GemGenerationConfig{MaxOutputTokens: p.config.MaxTokens}
 	if thinkingMode {
-		genConfig["thinkingConfig"] = map[string]interface{}{
-			"thinkingBudget": 8192,
-		}
+		genConfig.ThinkingConfig = &GemThinkingConfig{ThinkingBudget: 8192}
 	}
+
+	gemTools := GemToolDefsFromPoly(toolDefs)
 
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := map[string]interface{}{
-			"contents":         contents,
-			"generationConfig": genConfig,
+		body := GemRequestBody{
+			Contents:         contents,
+			GenerationConfig: genConfig,
+			Tools:            gemTools,
 		}
-		BuildRequestWithTools(body, toolDefs, ToolFormatGoogle)
 
 		resp, err := p.doRequest(ctx, body, thinkingMode)
 		if err != nil {
@@ -390,25 +349,17 @@ func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages 
 		}
 
 		// Build model response with function calls
-		modelParts := make([]interface{}, 0)
+		modelParts := make([]GemPart, 0, len(result.toolCalls)+1)
 		if result.content != "" {
-			modelParts = append(modelParts, map[string]interface{}{"text": result.content})
+			modelParts = append(modelParts, NewGemTextPart(result.content))
 		}
 		for _, tc := range result.toolCalls {
-			modelParts = append(modelParts, map[string]interface{}{
-				"functionCall": map[string]interface{}{
-					"name": tc.name,
-					"args": tc.input,
-				},
-			})
+			modelParts = append(modelParts, NewGemFunctionCallPart(tc.name, tc.input))
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  "model",
-			"parts": modelParts,
-		})
+		contents = append(contents, GemContent{Role: "model", Parts: modelParts})
 
 		// Execute tools and build function responses
-		responseParts := make([]interface{}, 0, len(result.toolCalls))
+		responseParts := make([]GemPart, 0, len(result.toolCalls))
 		for _, tc := range result.toolCalls {
 			eventChan <- StreamEvent{
 				Type:     "tool_use",
@@ -420,19 +371,9 @@ func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages 
 				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
 				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
 			}
-			responseParts = append(responseParts, map[string]interface{}{
-				"functionResponse": map[string]interface{}{
-					"name": tc.name,
-					"response": map[string]interface{}{
-						"content": toolResult.Content,
-					},
-				},
-			})
+			responseParts = append(responseParts, NewGemFunctionResponsePart(tc.name, toolResult.Content))
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  "user",
-			"parts": responseParts,
-		})
+		contents = append(contents, GemContent{Role: "user", Parts: responseParts})
 	}
 
 	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
@@ -444,7 +385,7 @@ func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages 
 
 // --- HTTP request with retry ---
 
-func (p *CustomProvider) doRequest(ctx context.Context, body map[string]interface{}, thinkingMode bool) (*http.Response, error) {
+func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinkingMode bool) (*http.Response, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
