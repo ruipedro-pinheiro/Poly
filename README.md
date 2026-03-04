@@ -12,7 +12,7 @@ Route prompts to Claude, Gemini, GPT, Grok, Copilot, Ollama — or any OpenAI/An
 
 </div>
 
-> **BETA (v0.6.x)** — Poly is in active development. Expect breaking changes, rough edges, and missing features. [Open an issue](https://github.com/ruipedro-pinheiro/Poly/issues/new/choose) if something breaks.
+> **BETA (v0.7.0)** — Poly is in active development. Expect breaking changes, rough edges, and missing features. [Open an issue](https://github.com/ruipedro-pinheiro/Poly/issues/new/choose) if something breaks.
 
 ---
 
@@ -27,14 +27,13 @@ Not everything is production-ready. Here's what works and what doesn't:
 | **Stable** | Built-in tools (21) | File ops, bash, git, web, diffs |
 | **Stable** | Session management | Auto-save, resume, fork, export |
 | **Stable** | OAuth + API key auth | PKCE for Anthropic/OpenAI/Google, Device Flow for Copilot |
-| **In Test** | Copilot provider | Device Flow auth, session token refresh |
-| **In Test** | Table Ronde (`@all`) | Multi-provider conversations |
-| **In Test** | MCP support | JSON-RPC 2.0 stdio, auto-reconnect |
-| **In Test** | Custom providers | OpenAI/Anthropic/Google-compatible endpoints |
-| **Experimental** | Sandboxed bash (Podman/Docker) | Container isolation, no network, read-only root |
-| **Experimental** | Hooks system | Pre/post tool execution, Go templates |
-| **Experimental** | Skills system | Custom .md behaviors in `~/.poly/skills/` |
-| **Experimental** | Context compaction | Auto-summarize near context limit |
+| **Stable** | Copilot provider | Device Flow auth, session token refresh |
+| **Stable** | Table Ronde (`@all`) | Multi-provider conversations |
+| **Stable** | Custom providers | OpenAI/Anthropic/Google-compatible endpoints |
+| **Stable** | Sandboxed bash (Podman/Docker) | Hardened isolation, no network, read-only root |
+| **Stable** | Context compaction | Auto-summarize near context limit |
+| **In Test** | Hooks system | Pre/post tool execution, Go templates |
+| **In Test** | Skills system | Custom .md behaviors in `~/.poly/skills/` |
 
 ---
 
