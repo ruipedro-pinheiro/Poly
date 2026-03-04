@@ -519,19 +519,6 @@ func (m Model) renderWelcomePanel() string {
 	return lipgloss.PlaceHorizontal(m.contentWidth(), lipgloss.Center, card)
 }
 
-func (m Model) renderThinkingModeChip() string {
-	modeText := "THINK"
-	modeColor := theme.Lavender
-	if !m.thinkingMode {
-		modeText = "FAST"
-		modeColor = theme.Teal
-	}
-	return lipgloss.NewStyle().
-		Foreground(modeColor).
-		Bold(true).
-		Render(modeText)
-}
-
 func clampInt(v, minV, maxV int) int {
 	if v < minV {
 		return minV
@@ -561,6 +548,7 @@ func renderTextBlock(content string, width int) string {
 	if width > 1 {
 		text = wrapTextHard(text, width)
 	}
+	text = renderMarkdown(text, width)
 
 	return lipgloss.NewStyle().
 		Foreground(theme.Text).
@@ -605,9 +593,8 @@ func wrapTextHard(text string, width int) string {
 
 			// Break very long words hard so they never overflow right edge.
 			if wordWidth > width {
-				runes := []rune(word)
 				var chunk strings.Builder
-				for _, r := range runes {
+				for _, r := range word {
 					next := chunk.String() + string(r)
 					if lipgloss.Width(next) > width && chunk.Len() > 0 {
 						out = append(out, chunk.String())

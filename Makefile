@@ -30,6 +30,14 @@ dev:
 release:
 	go build -ldflags "$(LDFLAGS) -s -w" -o $(BINARY) .
 
+## release-check: Local release gate (semver policy + docs + CI)
+release-check:
+	@if [ -z "$(RELEASE_VERSION)" ]; then \
+		echo "Usage: make release-check RELEASE_VERSION=vX.Y.Z"; \
+		exit 1; \
+	fi
+	@bash scripts/release_check.sh "$(RELEASE_VERSION)"
+
 ## install: Install binary to ~/go/bin/
 install: build
 	cp $(BINARY) ~/go/bin/
@@ -40,11 +48,11 @@ install: build
 
 ## test: Run all tests
 test:
-	go test ./...
+	bash scripts/test_unit_strict.sh
 
 ## test-verbose: Run tests with verbose output
 test-verbose:
-	go test -v ./...
+	bash scripts/test_unit_strict.sh --verbose
 
 ## test-coverage: Run tests with coverage report (text + HTML)
 test-coverage:
@@ -66,6 +74,10 @@ ci:
 	go build ./...
 	go vet ./...
 	go test -race -count=1 ./...
+
+## ci-strict: Mirror CI locally (build + vet + lint + race tests)
+ci-strict:
+	bash scripts/ci_strict.sh
 
 ## fmt: Format all Go source files
 fmt:
@@ -107,4 +119,4 @@ help:
 # Phony declarations
 # ============================================================================
 
-.PHONY: build dev release install test test-verbose test-coverage lint ci fmt clean setup-42 sandbox-setup version help
+.PHONY: build dev release release-check install test test-verbose test-coverage lint ci ci-strict fmt clean setup-42 sandbox-setup version help
