@@ -289,11 +289,9 @@ func (m Model) renderControlRoom() string {
 			content.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render(label) + "\n")
 
 			if m.authStatusMsg != "" {
-				statusColor := theme.Green
+				statusColor := theme.Mauve
 				if strings.HasPrefix(m.authStatusMsg, "Error:") {
 					statusColor = theme.Red
-				} else {
-					statusColor = theme.Mauve
 				}
 				content.WriteString(lipgloss.NewStyle().Foreground(statusColor).Bold(true).Render(m.authStatusMsg) + "\n")
 			} else {
