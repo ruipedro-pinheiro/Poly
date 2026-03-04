@@ -42,7 +42,7 @@ type AntImageSource struct {
 // AntToolDef is a tool definition in Anthropic format.
 type AntToolDef struct {
 	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
+	Description string                 `description:"description"`
 	InputSchema map[string]interface{} `json:"input_schema"`
 }
 
@@ -91,10 +91,38 @@ func AntToolDefsFromPoly(defs []ToolDefinition, isOAuth bool) []AntToolDef {
 }
 
 // BuildAntImageContent creates content blocks from a Poly Message with images.
+// Returns nil if the message should be skipped.
 func BuildAntImageContent(msg Message) interface{} {
+	// For messages with tool results
+	if msg.ToolResult != nil {
+		return []AntContentBlock{NewAntToolResultBlock(msg.ToolResult.ToolUseID, msg.ToolResult.Content, msg.ToolResult.IsError)}
+	}
+
+	// For messages with tool calls
+	if len(msg.ToolCalls) > 0 {
+		blocks := make([]AntContentBlock, 0, len(msg.ToolCalls)+1)
+		if msg.Content != "" {
+			blocks = append(blocks, AntContentBlock{Type: "text", Text: msg.Content})
+		}
+		for _, tc := range msg.ToolCalls {
+			blocks = append(blocks, AntContentBlock{
+				Type:  "tool_use",
+				ID:    tc.ID,
+				Name:  tc.Name,
+				Input: tc.Arguments,
+			})
+		}
+		return blocks
+	}
+
+	// For regular messages (with or without images)
 	if len(msg.Images) == 0 {
+		if msg.Content == "" {
+			return nil
+		}
 		return msg.Content
 	}
+
 	blocks := make([]AntContentBlock, 0, len(msg.Images)+1)
 	for _, img := range msg.Images {
 		blocks = append(blocks, AntContentBlock{
@@ -111,6 +139,10 @@ func BuildAntImageContent(msg Message) interface{} {
 			Type: "text",
 			Text: msg.Content,
 		})
+	}
+
+	if len(blocks) == 0 {
+		return nil
 	}
 	return blocks
 }

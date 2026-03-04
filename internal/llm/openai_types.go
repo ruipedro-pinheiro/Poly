@@ -8,59 +8,58 @@ import "encoding/base64"
 
 // --- Request Types ---
 
-// OAIMessage represents a message in OpenAI chat completion format.
-// Content can be a string (text-only) or a slice of OAIContentPart (multimodal).
+// OAIMessage represents a message in the OpenAI chat completions format.
 type OAIMessage struct {
-	Role       string           `json:"role"`
-	Content    interface{}      `json:"content"` // string or []OAIContentPart
-	ToolCalls  []OAIToolCallMsg `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"` // present when role="tool"
+	Role      string            `json:"role"`
+	Content   interface{}       `json:"content"`             // string or []OAIContentPart
+	ToolCalls []OAIToolCallMsg  `json:"tool_calls,omitempty"` // for assistant messages
+	ToolUseID string            `json:"tool_call_id,omitempty"`
 }
 
-// OAIContentPart is a content block within a multimodal message.
+// OAIContentPart represents a single part of a multi-modal message.
 type OAIContentPart struct {
 	Type     string       `json:"type"` // "text" or "image_url"
 	Text     string       `json:"text,omitempty"`
 	ImageURL *OAIImageURL `json:"image_url,omitempty"`
 }
 
-// OAIImageURL wraps an image URL for vision-capable models.
+// OAIImageURL holds a base64-encoded image data URL.
 type OAIImageURL struct {
-	URL string `json:"url"`
+	URL string `json:"url"` // "data:image/png;base64,..."
 }
 
-// OAIToolDef wraps a function tool definition.
-type OAIToolDef struct {
-	Type     string         `json:"type"` // always "function"
-	Function OAIFunctionDef `json:"function"`
-}
-
-// OAIFunctionDef describes a callable function tool.
-type OAIFunctionDef struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
-}
-
-// OAIToolCallMsg represents a tool call within an assistant message.
+// OAIToolCallMsg represents an LLM's request to call a tool.
 type OAIToolCallMsg struct {
 	ID       string          `json:"id"`
-	Type     string          `json:"type"` // always "function"
+	Type     string          `json:"type"` // "function"
 	Function OAIToolCallFunc `json:"function"`
 }
 
-// OAIToolCallFunc holds the function name and its serialized arguments.
+// OAIToolCallFunc holds the function name and arguments.
 type OAIToolCallFunc struct {
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"` // JSON string
 }
 
-// OAIStreamOptions configures streaming behavior.
+// OAIToolDef is a tool definition in OpenAI format.
+type OAIToolDef struct {
+	Type     string          `json:"type"` // "function"
+	Function OAIToolFunction `json:"function"`
+}
+
+// OAIToolFunction describes the function's metadata.
+type OAIToolFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+}
+
+// OAIStreamOptions configures additional streaming behavior.
 type OAIStreamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
 
-// OAIRequestBody is the top-level request for OpenAI-compatible chat completions.
+// OAIRequestBody is the top-level request for the OpenAI chat completions API.
 type OAIRequestBody struct {
 	Model               string            `json:"model"`
 	Stream              bool              `json:"stream"`
@@ -79,21 +78,22 @@ func NewOAITextMessage(role, content string) OAIMessage {
 	return OAIMessage{Role: role, Content: content}
 }
 
-// NewOAIToolResultMessage creates a tool result message.
-func NewOAIToolResultMessage(toolCallID, content string) OAIMessage {
-	return OAIMessage{Role: "tool", ToolCallID: toolCallID, Content: content}
+// NewOAIAssistantMessage creates an assistant message with tool calls.
+func NewOAIAssistantMessage(content string, toolCalls []OAIToolCallMsg) OAIMessage {
+	return OAIMessage{
+		Role:      "assistant",
+		Content:   content,
+		ToolCalls: toolCalls,
+	}
 }
 
-// NewOAIAssistantMessage creates an assistant message with optional tool calls.
-func NewOAIAssistantMessage(content string, toolCalls []OAIToolCallMsg) OAIMessage {
-	msg := OAIMessage{Role: "assistant"}
-	if content != "" {
-		msg.Content = content
+// NewOAIToolResultMessage creates a message with a tool execution result.
+func NewOAIToolResultMessage(toolCallID, content string) OAIMessage {
+	return OAIMessage{
+		Role:      "tool",
+		ToolUseID: toolCallID,
+		Content:   content,
 	}
-	if len(toolCalls) > 0 {
-		msg.ToolCalls = toolCalls
-	}
-	return msg
 }
 
 // OAIToolDefsFromPoly converts Poly ToolDefinitions to OpenAI format.
@@ -105,7 +105,7 @@ func OAIToolDefsFromPoly(defs []ToolDefinition) []OAIToolDef {
 	for i, d := range defs {
 		result[i] = OAIToolDef{
 			Type: "function",
-			Function: OAIFunctionDef{
+			Function: OAIToolFunction{
 				Name:        d.Name,
 				Description: d.Description,
 				Parameters:  d.InputSchema,
@@ -115,11 +115,21 @@ func OAIToolDefsFromPoly(defs []ToolDefinition) []OAIToolDef {
 	return result
 }
 
-// BuildOAIImageParts creates multimodal content parts from a Poly Message.
+// BuildOAIImageParts creates content parts from a Poly Message with images.
+// Returns nil if the message should be skipped.
 func BuildOAIImageParts(msg Message) interface{} {
-	if len(msg.Images) == 0 {
+	// Special cases for messages with tools/results
+	if msg.ToolResult != nil || len(msg.ToolCalls) > 0 {
 		return msg.Content
 	}
+
+	if len(msg.Images) == 0 {
+		if msg.Content == "" {
+			return nil
+		}
+		return msg.Content
+	}
+
 	parts := make([]OAIContentPart, 0, len(msg.Images)+1)
 	for _, img := range msg.Images {
 		dataURL := "data:" + img.MediaType + ";base64," + base64.StdEncoding.EncodeToString(img.Data)
@@ -128,9 +138,15 @@ func BuildOAIImageParts(msg Message) interface{} {
 			ImageURL: &OAIImageURL{URL: dataURL},
 		})
 	}
-	parts = append(parts, OAIContentPart{
-		Type: "text",
-		Text: msg.Content,
-	})
+	if msg.Content != "" {
+		parts = append(parts, OAIContentPart{
+			Type: "text",
+			Text: msg.Content,
+		})
+	}
+
+	if len(parts) == 0 {
+		return nil
+	}
 	return parts
 }

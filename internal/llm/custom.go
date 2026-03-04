@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/pedromelo/poly/internal/config"
-	"github.com/pedromelo/poly/internal/tools"
 )
 
 // CustomProviderConfig defines a user-added provider
@@ -85,308 +84,125 @@ func (p *CustomProvider) Stream(ctx context.Context, messages []Message, toolDef
 
 		role := GetRole(opts)
 		thinkingMode := GetThinkingMode(opts)
-		p.agenticLoop(ctx, messages, toolDefs, eventChan, role, thinkingMode)
+
+		// Define the request handler for the agentic loop
+		handler := func(ctx context.Context, history []Message, internalChan chan<- StreamEvent) (*SingleTurnResult, error) {
+			var body interface{}
+			var res *customStreamResult
+			var err error
+
+			switch p.config.Format {
+			case "anthropic":
+				antHistory := p.buildAnthropicHistory(history)
+				antTools := AntToolDefsFromPoly(toolDefs, false)
+				body = AntRequestBody{
+					Model:     p.config.Model,
+					MaxTokens: p.config.MaxTokens,
+					Stream:    true,
+					Messages:  antHistory,
+					System:    BuildSystemPrompt(p.config.ID, role),
+					Tools:     antTools,
+				}
+
+			case "google":
+				gemContents := p.buildGoogleHistory(history, role)
+				gemTools := GemToolDefsFromPoly(toolDefs)
+				body = GemRequestBody{
+					Contents:         gemContents,
+					GenerationConfig: &GemGenerationConfig{MaxOutputTokens: p.config.MaxTokens},
+					Tools:            gemTools,
+				}
+
+			default: // OpenAI
+				oaiHistory := p.buildOpenAIHistory(history, role)
+				oaiTools := OAIToolDefsFromPoly(toolDefs)
+				body = OAIRequestBody{
+					Model:    p.config.Model,
+					Stream:   true,
+					Messages: oaiHistory,
+					Tools:    oaiTools,
+				}
+				// OpenAI specific reasoning handling...
+			}
+
+			resp, err := p.doRequest(ctx, body, thinkingMode)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+
+			switch p.config.Format {
+			case "anthropic":
+				res = p.parseAnthropicStreamResult(resp.Body, internalChan)
+			case "google":
+				res = p.parseGoogleStreamResult(resp.Body, internalChan)
+			default:
+				res = p.parseOpenAIStreamResult(resp.Body, internalChan)
+			}
+
+			// Convert customStreamResult to generic SingleTurnResult
+			return &SingleTurnResult{
+				Content:   res.content,
+				ToolCalls: res.toolCalls,
+			}, nil
+		}
+
+		// Run the universal agentic loop
+		RunAgenticLoop(ctx, p.config.ID, p.config.Model, messages, toolDefs, eventChan, handler)
 	}()
 
 	return eventChan
 }
 
-// customStreamResult holds the parsed result of a single streaming request
-type customStreamResult struct {
-	content   string
-	toolCalls []customToolCall
-}
-
-type customToolCall struct {
-	id    string
-	name  string
-	input map[string]interface{}
-}
-
-// agenticLoop runs the tool-use loop for custom providers
-func (p *CustomProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool) {
-	var fullContent strings.Builder
-
-	switch p.config.Format {
-	case "anthropic":
-		p.agenticLoopAnthropic(ctx, initialMessages, toolDefs, eventChan, role, thinkingMode, &fullContent)
-	case "google":
-		p.agenticLoopGoogle(ctx, initialMessages, toolDefs, eventChan, role, thinkingMode, &fullContent)
-	default:
-		p.agenticLoopOpenAI(ctx, initialMessages, toolDefs, eventChan, role, thinkingMode, &fullContent)
-	}
-}
-
-// --- OpenAI format agentic loop ---
-
-func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
-	// Build conversation history
-	msgs := make([]OAIMessage, 0, len(initialMessages)+1)
-	msgs = append(msgs, NewOAITextMessage("system", BuildSystemPrompt(p.config.ID, role)))
-	for _, msg := range initialMessages {
-		msgs = append(msgs, NewOAITextMessage(msg.Role, msg.Content))
-	}
-
-	oaiTools := OAIToolDefsFromPoly(toolDefs)
-
-	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := OAIRequestBody{
-			Model:    p.config.Model,
-			Stream:   true,
-			Messages: msgs,
-			Tools:    oaiTools,
-		}
-		if thinkingMode && IsReasoningModel(p.config.ID, p.config.Model) {
-			body.ReasoningEffort = "high"
-			body.MaxCompletionTokens = p.config.MaxTokens
-		} else {
-			body.MaxTokens = p.config.MaxTokens
-		}
-
-		if thinkingMode && IsReasoningModel(p.config.ID, p.config.Model) {
-			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
-		}
-
-		resp, err := p.doRequest(ctx, body, thinkingMode)
-		if err != nil {
-			eventChan <- StreamEvent{Type: "error", Error: err}
-			return
-		}
-
-		result := p.parseOpenAIStreamResult(resp.Body, eventChan)
-		resp.Body.Close()
-
-		fullContent.WriteString(result.content)
-
-		if len(result.toolCalls) == 0 {
-			eventChan <- StreamEvent{
-				Type: "done",
-				Response: &Response{
-					Content:  fullContent.String(),
-					Provider: p.config.ID,
-					Model:    p.config.Model,
-				},
-			}
-			return
-		}
-
-		// Build assistant message with tool_calls
-		tcMsgs := make([]OAIToolCallMsg, len(result.toolCalls))
-		for i, tc := range result.toolCalls {
-			argsJSON, _ := json.Marshal(tc.input)
-			tcMsgs[i] = OAIToolCallMsg{
-				ID:   tc.id,
-				Type: "function",
-				Function: OAIToolCallFunc{
-					Name:      tc.name,
-					Arguments: string(argsJSON),
-				},
-			}
-		}
-		msgs = append(msgs, NewOAIAssistantMessage(result.content, tcMsgs))
-
-		// Execute tools
-		for _, tc := range result.toolCalls {
-			eventChan <- StreamEvent{
-				Type:     "tool_use",
-				ToolCall: &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-			}
-			toolResult := tools.Execute(tc.name, tc.input)
-			eventChan <- StreamEvent{
-				Type:       "tool_result",
-				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
-			}
-			msgs = append(msgs, NewOAIToolResultMessage(tc.id, toolResult.Content))
-		}
-	}
-
-	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
-	eventChan <- StreamEvent{
-		Type:     "done",
-		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
-	}
-}
-
-// --- Anthropic format agentic loop ---
-
-func (p *CustomProvider) agenticLoopAnthropic(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
-	msgs := make([]AntMessage, 0, len(initialMessages))
-	for _, msg := range initialMessages {
-		msgs = append(msgs, NewAntTextMessage(msg.Role, msg.Content))
-	}
-
-	antTools := AntToolDefsFromPoly(toolDefs, false)
-
-	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := AntRequestBody{
-			Model:     p.config.Model,
-			MaxTokens: p.config.MaxTokens,
-			Stream:    true,
-			Messages:  msgs,
-			System:    BuildSystemPrompt(p.config.ID, role),
-			Tools:     antTools,
-		}
-		if thinkingMode {
-			budgetTokens := 10000
-			if body.MaxTokens <= budgetTokens {
-				body.MaxTokens = budgetTokens + 4096
-			}
-			body.Thinking = &AntThinkingConfig{
-				Type:         "enabled",
-				BudgetTokens: budgetTokens,
-			}
-		}
-
-		resp, err := p.doRequest(ctx, body, thinkingMode)
-		if err != nil {
-			eventChan <- StreamEvent{Type: "error", Error: err}
-			return
-		}
-
-		result := p.parseAnthropicStreamResult(resp.Body, eventChan)
-		resp.Body.Close()
-
-		fullContent.WriteString(result.content)
-
-		if len(result.toolCalls) == 0 {
-			eventChan <- StreamEvent{
-				Type: "done",
-				Response: &Response{
-					Content:  fullContent.String(),
-					Provider: p.config.ID,
-					Model:    p.config.Model,
-				},
-			}
-			return
-		}
-
-		// Build assistant content blocks
-		assistantBlocks := make([]AntContentBlock, 0, len(result.toolCalls)+1)
-		if result.content != "" {
-			assistantBlocks = append(assistantBlocks, AntContentBlock{Type: "text", Text: result.content})
-		}
-		for _, tc := range result.toolCalls {
-			assistantBlocks = append(assistantBlocks, AntContentBlock{
-				Type:  "tool_use",
-				ID:    tc.id,
-				Name:  tc.name,
-				Input: tc.input,
+func (p *CustomProvider) buildOpenAIHistory(messages []Message, role string) []OAIMessage {
+	history := make([]OAIMessage, 0, len(messages)+1)
+	history = append(history, NewOAITextMessage("system", BuildSystemPrompt(p.config.ID, role)))
+	for _, msg := range messages {
+		content := BuildOAIImageParts(msg)
+		if content != nil {
+			history = append(history, OAIMessage{
+				Role:    msg.Role,
+				Content: content,
 			})
 		}
-		msgs = append(msgs, AntMessage{Role: "assistant", Content: assistantBlocks})
-
-		// Execute tools
-		toolResultBlocks := make([]AntContentBlock, 0, len(result.toolCalls))
-		for _, tc := range result.toolCalls {
-			eventChan <- StreamEvent{
-				Type:     "tool_use",
-				ToolCall: &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-			}
-			toolResult := tools.Execute(tc.name, tc.input)
-			eventChan <- StreamEvent{
-				Type:       "tool_result",
-				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
-			}
-			toolResultBlocks = append(toolResultBlocks, NewAntToolResultBlock(tc.id, toolResult.Content, toolResult.IsError))
-		}
-		msgs = append(msgs, AntMessage{Role: "user", Content: toolResultBlocks})
 	}
-
-	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
-	eventChan <- StreamEvent{
-		Type:     "done",
-		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
-	}
+	return history
 }
 
-// --- Google format agentic loop ---
+func (p *CustomProvider) buildAnthropicHistory(messages []Message) []AntMessage {
+	var history []AntMessage
+	for _, msg := range messages {
+		content := BuildAntImageContent(msg)
+		if content != nil {
+			history = append(history, AntMessage{
+				Role:    msg.Role,
+				Content: content,
+			})
+		}
+	}
+	return history
+}
 
-func (p *CustomProvider) agenticLoopGoogle(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, role string, thinkingMode bool, fullContent *strings.Builder) {
-	contents := make([]GemContent, 0, len(initialMessages)+2)
+func (p *CustomProvider) buildGoogleHistory(messages []Message, role string) []GemContent {
+	contents := make([]GemContent, 0, len(messages)+2)
 	contents = append(contents,
 		GemContent{Role: "user", Parts: []GemPart{NewGemTextPart(BuildSystemPrompt(p.config.ID, role))}},
 		GemContent{Role: "model", Parts: []GemPart{NewGemTextPart("Understood.")}},
 	)
-	for _, msg := range initialMessages {
+	for _, msg := range messages {
 		r := "user"
 		if msg.Role == "assistant" {
 			r = "model"
 		}
 		contents = append(contents, GemContent{Role: r, Parts: []GemPart{NewGemTextPart(msg.Content)}})
 	}
+	return contents
+}
 
-	genConfig := &GemGenerationConfig{MaxOutputTokens: p.config.MaxTokens}
-	if thinkingMode {
-		genConfig.ThinkingConfig = &GemThinkingConfig{ThinkingBudget: 8192}
-	}
-
-	gemTools := GemToolDefsFromPoly(toolDefs)
-
-	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := GemRequestBody{
-			Contents:         contents,
-			GenerationConfig: genConfig,
-			Tools:            gemTools,
-		}
-
-		resp, err := p.doRequest(ctx, body, thinkingMode)
-		if err != nil {
-			eventChan <- StreamEvent{Type: "error", Error: err}
-			return
-		}
-
-		result := p.parseGoogleStreamResult(resp.Body, eventChan)
-		resp.Body.Close()
-
-		fullContent.WriteString(result.content)
-
-		if len(result.toolCalls) == 0 {
-			eventChan <- StreamEvent{
-				Type: "done",
-				Response: &Response{
-					Content:  fullContent.String(),
-					Provider: p.config.ID,
-					Model:    p.config.Model,
-				},
-			}
-			return
-		}
-
-		// Build model response with function calls
-		modelParts := make([]GemPart, 0, len(result.toolCalls)+1)
-		if result.content != "" {
-			modelParts = append(modelParts, NewGemTextPart(result.content))
-		}
-		for _, tc := range result.toolCalls {
-			modelParts = append(modelParts, NewGemFunctionCallPart(tc.name, tc.input))
-		}
-		contents = append(contents, GemContent{Role: "model", Parts: modelParts})
-
-		// Execute tools and build function responses
-		responseParts := make([]GemPart, 0, len(result.toolCalls))
-		for _, tc := range result.toolCalls {
-			eventChan <- StreamEvent{
-				Type:     "tool_use",
-				ToolCall: &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-			}
-			toolResult := tools.Execute(tc.name, tc.input)
-			eventChan <- StreamEvent{
-				Type:       "tool_result",
-				ToolCall:   &ToolCall{ID: tc.id, Name: tc.name, Arguments: tc.input},
-				ToolResult: &ToolResult{ToolUseID: tc.id, Content: toolResult.Content, IsError: toolResult.IsError},
-			}
-			responseParts = append(responseParts, NewGemFunctionResponsePart(tc.name, toolResult.Content))
-		}
-		contents = append(contents, GemContent{Role: "user", Parts: responseParts})
-	}
-
-	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
-	eventChan <- StreamEvent{
-		Type:     "done",
-		Response: &Response{Content: fullContent.String(), Provider: p.config.ID, Model: p.config.Model},
-	}
+// customStreamResult holds the parsed result of a single streaming request
+type customStreamResult struct {
+	content   string
+	toolCalls []ToolCall
 }
 
 // --- HTTP request with retry ---
@@ -431,7 +247,7 @@ func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinki
 				req.Header.Set("anthropic-beta", "interleaved-thinking-2025-05-14")
 			}
 		case "google":
-			// Google uses URL param
+			// Google uses URL param or env
 		default:
 			if p.config.AuthHeader == "x-api-key" {
 				req.Header.Set("x-api-key", p.config.APIKey)
@@ -444,13 +260,13 @@ func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinki
 	return DoWithRetry(ctx, p.httpClient, req)
 }
 
-// --- Stream parsers that return results with tool calls ---
+// --- Stream parsers ---
 
 func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	result := &customStreamResult{}
-	toolCallsMap := make(map[int]*customToolCall)
+	toolCallsMap := make(map[int]*ToolCall)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -497,38 +313,29 @@ func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<
 
 		for _, tc := range delta.ToolCalls {
 			if tc.ID != "" {
-				toolCallsMap[tc.Index] = &customToolCall{id: tc.ID, name: tc.Function.Name}
+				toolCallsMap[tc.Index] = &ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: make(map[string]interface{})}
+				toolCallsMap[tc.Index].Arguments["_raw"] = ""
 			}
-
 			if tc.Function.Arguments != "" && toolCallsMap[tc.Index] != nil {
-				// Accumulate raw args - we'll parse at the end
-				if toolCallsMap[tc.Index].input == nil {
-					toolCallsMap[tc.Index].input = map[string]interface{}{"_raw": ""}
-				}
-				raw := toolCallsMap[tc.Index].input["_raw"].(string)
-				toolCallsMap[tc.Index].input["_raw"] = raw + tc.Function.Arguments
+				raw := toolCallsMap[tc.Index].Arguments["_raw"].(string)
+				toolCallsMap[tc.Index].Arguments["_raw"] = raw + tc.Function.Arguments
 			}
 		}
 
-		// Detect end of stream from finish_reason or common stop markers
 		reason := strings.ToLower(choice.FinishReason)
 		if reason == "tool_calls" || reason == "stop" || reason == "end_turn" {
 			break
 		}
 	}
 
-	// Parse accumulated tool call arguments
 	for _, tc := range toolCallsMap {
-		if raw, ok := tc.input["_raw"].(string); ok && raw != "" {
+		if raw, ok := tc.Arguments["_raw"].(string); ok && raw != "" {
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(raw), &args); err == nil {
-				tc.input = args
+				tc.Arguments = args
 			} else {
-				tc.input = make(map[string]interface{})
+				tc.Arguments = make(map[string]interface{})
 			}
-		}
-		if tc.input == nil {
-			tc.input = make(map[string]interface{})
 		}
 		result.toolCalls = append(result.toolCalls, *tc)
 	}
@@ -538,9 +345,9 @@ func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<
 
 func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	result := &customStreamResult{}
-	var currentToolCall *customToolCall
+	var currentToolCall *ToolCall
 	var currentToolInput strings.Builder
 
 	for scanner.Scan() {
@@ -560,11 +367,10 @@ func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan ch
 		switch eventType {
 		case "content_block_start":
 			if contentBlock, ok := event["content_block"].(map[string]interface{}); ok {
-				blockType, _ := contentBlock["type"].(string)
-				if blockType == "tool_use" {
+				if blockType, _ := contentBlock["type"].(string); blockType == "tool_use" {
 					id, _ := contentBlock["id"].(string)
 					name, _ := contentBlock["name"].(string)
-					currentToolCall = &customToolCall{id: id, name: name}
+					currentToolCall = &ToolCall{ID: id, Name: name}
 					currentToolInput.Reset()
 				}
 			}
@@ -590,17 +396,11 @@ func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan ch
 
 		case "content_block_stop":
 			if currentToolCall != nil {
-				inputStr := currentToolInput.String()
 				var input map[string]interface{}
-				if inputStr != "" {
-					if err := json.Unmarshal([]byte(inputStr), &input); err != nil {
-						input = make(map[string]interface{})
-					}
-				}
-				if input == nil {
+				if err := json.Unmarshal([]byte(currentToolInput.String()), &input); err != nil {
 					input = make(map[string]interface{})
 				}
-				currentToolCall.input = input
+				currentToolCall.Arguments = input
 				result.toolCalls = append(result.toolCalls, *currentToolCall)
 				currentToolCall = nil
 			}
@@ -615,7 +415,7 @@ func (p *CustomProvider) parseAnthropicStreamResult(body io.Reader, eventChan ch
 
 func (p *CustomProvider) parseGoogleStreamResult(body io.Reader, eventChan chan<- StreamEvent) *customStreamResult {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	result := &customStreamResult{}
 
 	for scanner.Scan() {
@@ -656,10 +456,10 @@ func (p *CustomProvider) parseGoogleStreamResult(body io.Reader, eventChan chan<
 				if args == nil {
 					args = make(map[string]interface{})
 				}
-				tc := customToolCall{
-					id:    fmt.Sprintf("call_%s_%d", part.FunctionCall.Name, len(result.toolCalls)),
-					name:  part.FunctionCall.Name,
-					input: args,
+				tc := ToolCall{
+					ID:        fmt.Sprintf("call_%s_%d", part.FunctionCall.Name, len(result.toolCalls)),
+					Name:      part.FunctionCall.Name,
+					Arguments: args,
 				}
 				result.toolCalls = append(result.toolCalls, tc)
 			} else if part.Text != "" {
@@ -686,7 +486,7 @@ func LoadCustomProviders() error {
 	data, err := os.ReadFile(customProvidersFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil // No custom providers yet
+			return nil
 		}
 		return err
 	}
@@ -700,7 +500,7 @@ func LoadCustomProviders() error {
 		p := NewCustomProvider(cfg)
 		RegisterProvider(p)
 
-		// Inject into global config so UI and system prompt see it
+		// Inject into global config
 		gcfg := config.Get()
 		if gcfg.Providers == nil {
 			gcfg.Providers = make(map[string]config.ProviderConfig)
@@ -713,7 +513,7 @@ func LoadCustomProviders() error {
 			Color:      cfg.Color,
 			MaxTokens:  cfg.MaxTokens,
 			AuthHeader: cfg.AuthHeader,
-			AuthType:   "api_key", // Custom providers always use API key for now
+			AuthType:   "api_key",
 			Models: map[string]string{
 				"default": cfg.Model,
 			},
@@ -725,16 +525,12 @@ func LoadCustomProviders() error {
 
 // SaveCustomProvider adds a new custom provider and saves
 func SaveCustomProvider(cfg CustomProviderConfig) error {
-	// Load existing
 	var configs []CustomProviderConfig
 	data, err := os.ReadFile(customProvidersFile)
 	if err == nil {
-		if err := json.Unmarshal(data, &configs); err != nil {
-			configs = nil
-		}
+		_ = json.Unmarshal(data, &configs)
 	}
 
-	// Update or add
 	found := false
 	for i, c := range configs {
 		if c.ID == cfg.ID {
@@ -747,7 +543,6 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 		configs = append(configs, cfg)
 	}
 
-	// Save
 	if err := os.MkdirAll(filepath.Dir(customProvidersFile), 0700); err != nil {
 		return err
 	}
@@ -761,11 +556,9 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 		return err
 	}
 
-	// Register the provider
 	p := NewCustomProvider(cfg)
 	RegisterProvider(p)
 
-	// Inject into global config
 	gcfg := config.Get()
 	if gcfg.Providers == nil {
 		gcfg.Providers = make(map[string]config.ProviderConfig)
@@ -794,12 +587,8 @@ func DeleteCustomProvider(id string) error {
 	if err != nil {
 		return err
 	}
+	_ = json.Unmarshal(data, &configs)
 
-	if err := json.Unmarshal(data, &configs); err != nil {
-		return err
-	}
-
-	// Filter out the provider
 	newConfigs := make([]CustomProviderConfig, 0, len(configs))
 	for _, c := range configs {
 		if c.ID != id {
@@ -822,8 +611,6 @@ func GetCustomProviders() []CustomProviderConfig {
 	if err != nil {
 		return nil
 	}
-	if err := json.Unmarshal(data, &configs); err != nil {
-		return nil
-	}
+	_ = json.Unmarshal(data, &configs)
 	return configs
 }

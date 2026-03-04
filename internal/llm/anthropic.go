@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/pedromelo/poly/internal/auth"
-	"github.com/pedromelo/poly/internal/tools"
 )
 
 const (
@@ -88,17 +87,86 @@ func (p *AnthropicProvider) Stream(ctx context.Context, messages []Message, tool
 		}
 
 		thinkingMode := GetThinkingMode(opts)
-		p.agenticLoop(ctx, messages, toolDefs, token, isOAuth, eventChan, GetRole(opts), thinkingMode)
+		role := GetRole(opts)
+
+		// Define the request handler for the agentic loop
+		handler := func(ctx context.Context, history []Message, internalChan chan<- StreamEvent) (*SingleTurnResult, error) {
+			antHistory := p.buildAnthropicHistory(history, isOAuth, role)
+			antTools := AntToolDefsFromPoly(toolDefs, isOAuth)
+
+			body := AntRequestBody{
+				Model:     p.config.Model,
+				MaxTokens: p.config.MaxTokens,
+				Stream:    true,
+				Messages:  antHistory,
+			}
+
+			// System prompt handling
+			if isOAuth {
+				body.System = ClaudeOAuthSystemPrompt
+			} else {
+				body.System = []AntContentBlock{{
+					Type:         "text",
+					Text:         BuildSystemPrompt("claude", role),
+					CacheControl: map[string]string{"type": "ephemeral"},
+				}}
+			}
+
+			if len(antTools) > 0 {
+				body.Tools = antTools
+			}
+
+			if thinkingMode {
+				budgetTokens := 10000
+				if body.MaxTokens <= budgetTokens {
+					body.MaxTokens = budgetTokens + 4096
+				}
+				body.Thinking = &AntThinkingConfig{
+					Type:         "enabled",
+					BudgetTokens: budgetTokens,
+				}
+			}
+
+			res, err := p.streamRequest(ctx, body, token, isOAuth, internalChan, thinkingMode)
+			if err != nil {
+				return nil, err
+			}
+
+			// Convert anthropic streamResult to generic SingleTurnResult
+			result := &SingleTurnResult{
+				Content:             res.content,
+				Thinking:            res.thinking,
+				InputTokens:         res.inputTokens,
+				OutputTokens:        res.outputTokens,
+				CacheCreationTokens: res.cacheCreationTokens,
+				CacheReadTokens:     res.cacheReadTokens,
+			}
+
+			for _, tc := range res.toolCalls {
+				name := tc.name
+				if isOAuth {
+					name = strings.TrimPrefix(name, mcpToolPrefix)
+				}
+				result.ToolCalls = append(result.ToolCalls, ToolCall{
+					ID:        tc.id,
+					Name:      name,
+					Arguments: tc.input,
+				})
+			}
+
+			return result, nil
+		}
+
+		// Run the universal agentic loop
+		RunAgenticLoop(ctx, "claude", p.config.Model, messages, toolDefs, eventChan, handler)
 	}()
 
 	return eventChan
 }
 
-func (p *AnthropicProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, token string, isOAuth bool, eventChan chan<- StreamEvent, role string, thinkingMode bool) {
+func (p *AnthropicProvider) buildAnthropicHistory(messages []Message, isOAuth bool, role string) []AntMessage {
 	var history []AntMessage
 
-	// For OAuth, inject Poly identity as user/assistant exchange
-	// (OAuth credential requires exact ClaudeOAuthSystemPrompt in body["system"])
 	if isOAuth {
 		polyPrompt := BuildSystemPrompt("claude", role)
 		history = append(history,
@@ -112,160 +180,26 @@ func (p *AnthropicProvider) agenticLoop(ctx context.Context, initialMessages []M
 		)
 	}
 
-	// Add initial messages with image support
-	for _, msg := range initialMessages {
-		history = append(history, AntMessage{
-			Role:    msg.Role,
-			Content: BuildAntImageContent(msg),
-		})
-	}
-
-	// Build tools array
-	antTools := AntToolDefsFromPoly(toolDefs, isOAuth)
-
-	// Agentic loop
-	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		body := AntRequestBody{
-			Model:     p.config.Model,
-			MaxTokens: p.config.MaxTokens,
-			Stream:    true,
-			Messages:  history,
-		}
-
-		// System prompt handling
-		if isOAuth {
-			body.System = ClaudeOAuthSystemPrompt
-		} else {
-			body.System = []AntContentBlock{{
-				Type:         "text",
-				Text:         BuildSystemPrompt("claude", role),
-				CacheControl: map[string]string{"type": "ephemeral"},
-			}}
-		}
-
-		if len(antTools) > 0 {
-			body.Tools = antTools
-		}
-
-		if thinkingMode {
-			budgetTokens := 10000
-			if body.MaxTokens <= budgetTokens {
-				body.MaxTokens = budgetTokens + 4096
-			}
-			body.Thinking = &AntThinkingConfig{
-				Type:         "enabled",
-				BudgetTokens: budgetTokens,
-			}
-		}
-
-		result, err := p.streamRequest(ctx, body, token, isOAuth, eventChan, thinkingMode)
-		if err != nil {
-			eventChan <- StreamEvent{Type: "error", Error: err}
-			return
-		}
-
-		if len(result.toolCalls) == 0 {
-			eventChan <- StreamEvent{
-				Type: "done",
-				Response: &Response{
-					Content:             result.content,
-					Provider:            "claude",
-					Model:               p.config.Model,
-					InputTokens:         result.inputTokens,
-					OutputTokens:        result.outputTokens,
-					CacheCreationTokens: result.cacheCreationTokens,
-					CacheReadTokens:     result.cacheReadTokens,
-				},
-			}
-			return
-		}
-
-		// Build assistant message content blocks
-		var assistantBlocks []AntContentBlock
-		if thinkingMode && len(result.thinkingBlocks) > 0 {
-			for _, tb := range result.thinkingBlocks {
-				assistantBlocks = append(assistantBlocks, AntContentBlock{
-					Type:      "thinking",
-					Thinking:  tb.thinking,
-					Signature: tb.signature,
-				})
-			}
-		} else if thinkingMode && result.thinking != "" {
-			assistantBlocks = append(assistantBlocks, AntContentBlock{
-				Type:     "thinking",
-				Thinking: result.thinking,
+	for _, msg := range messages {
+		// Use specialized builder for messages with tools/results or images
+		content := BuildAntImageContent(msg)
+		if content != nil {
+			history = append(history, AntMessage{
+				Role:    msg.Role,
+				Content: content,
 			})
 		}
-		if result.content != "" {
-			assistantBlocks = append(assistantBlocks, AntContentBlock{
-				Type: "text",
-				Text: result.content,
-			})
-		}
-		for _, tc := range result.toolCalls {
-			name := tc.name
-			if isOAuth {
-				name = mcpToolPrefix + name
-			}
-			assistantBlocks = append(assistantBlocks, AntContentBlock{
-				Type:  "tool_use",
-				ID:    tc.id,
-				Name:  name,
-				Input: tc.input,
-			})
-		}
-		history = append(history, AntMessage{Role: "assistant", Content: assistantBlocks})
-
-		// Execute tools
-		toolResultBlocks := make([]AntContentBlock, 0, len(result.toolCalls))
-		for _, tc := range result.toolCalls {
-			eventChan <- StreamEvent{
-				Type: "tool_use",
-				ToolCall: &ToolCall{
-					ID:        tc.id,
-					Name:      tc.name,
-					Arguments: tc.input,
-				},
-			}
-
-			toolResult := tools.Execute(tc.name, tc.input)
-
-			eventChan <- StreamEvent{
-				Type: "tool_result",
-				ToolCall: &ToolCall{
-					ID:        tc.id,
-					Name:      tc.name,
-					Arguments: tc.input,
-				},
-				ToolResult: &ToolResult{
-					ToolUseID: tc.id,
-					Content:   toolResult.Content,
-					IsError:   toolResult.IsError,
-				},
-			}
-
-			toolResultBlocks = append(toolResultBlocks,
-				NewAntToolResultBlock(tc.id, toolResult.Content, toolResult.IsError))
-		}
-
-		history = append(history, AntMessage{Role: "user", Content: toolResultBlocks})
 	}
 
-	eventChan <- StreamEvent{Type: "content", Content: "\n⚠️ Max tool turns reached\n"}
-	eventChan <- StreamEvent{
-		Type:     "done",
-		Response: &Response{Content: "", Provider: "claude", Model: p.config.Model},
-	}
+	return history
 }
-
-// buildAnthropicMessage is no longer needed — using AntMessage + BuildAntImageContent directly.
 
 type thinkingBlock struct {
 	thinking  string
 	signature string
 }
 
-type streamResult struct {
+type anthropicStreamResult struct {
 	content             string
 	thinking            string
 	thinkingBlocks      []thinkingBlock
@@ -282,7 +216,7 @@ type toolCallInfo struct {
 	input map[string]interface{}
 }
 
-func (p *AnthropicProvider) streamRequest(ctx context.Context, body interface{}, token string, isOAuth bool, eventChan chan<- StreamEvent, thinkingMode bool) (*streamResult, error) {
+func (p *AnthropicProvider) streamRequest(ctx context.Context, body interface{}, token string, isOAuth bool, eventChan chan<- StreamEvent, thinkingMode bool) (*anthropicStreamResult, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -322,7 +256,7 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body interface{},
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large SSE events
-	result := &streamResult{}
+	result := &anthropicStreamResult{}
 	var currentToolCall *toolCallInfo
 	var currentToolInput strings.Builder
 	var currentThinking *thinkingBlock
@@ -348,7 +282,6 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body interface{},
 
 		switch eventType {
 		case "message_start":
-			// Parse input tokens and cache metrics from message_start event
 			if message, ok := event["message"].(map[string]interface{}); ok {
 				if usage, ok := message["usage"].(map[string]interface{}); ok {
 					if input, ok := usage["input_tokens"].(float64); ok {
@@ -364,7 +297,6 @@ func (p *AnthropicProvider) streamRequest(ctx context.Context, body interface{},
 			}
 
 		case "message_delta":
-			// Parse output tokens and cache metrics from message_delta event
 			if usage, ok := event["usage"].(map[string]interface{}); ok {
 				if output, ok := usage["output_tokens"].(float64); ok {
 					result.outputTokens = int(output)
