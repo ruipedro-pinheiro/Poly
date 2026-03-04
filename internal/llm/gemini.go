@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	cryptoRand "crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,48 +85,23 @@ func (p *GeminiProvider) Stream(ctx context.Context, messages []Message, toolDef
 // agenticLoopPublicAPI runs the tool-use loop for public Gemini API
 func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, apiKey string, eventChan chan<- StreamEvent, role string, thinkingMode bool) {
 	// Build conversation contents
-	contents := make([]map[string]interface{}, 0, len(initialMessages)+2)
-
-	// System context as user/model pair with dynamic prompt
 	systemPrompt := BuildSystemPrompt("gemini", role)
+	contents := make([]GemContent, 0, len(initialMessages)+2)
 	contents = append(contents,
-		map[string]interface{}{
-			"role":  "user",
-			"parts": []map[string]interface{}{{"text": systemPrompt}},
-		},
-		map[string]interface{}{
-			"role":  "model",
-			"parts": []map[string]interface{}{{"text": "Understood. I'm Gemini, chatting through Poly."}},
-		},
+		GemContent{Role: "user", Parts: []GemPart{NewGemTextPart(systemPrompt)}},
+		GemContent{Role: "model", Parts: []GemPart{NewGemTextPart("Understood. I'm Gemini, chatting through Poly.")}},
 	)
 
 	// Add initial messages with image support
 	for _, msg := range initialMessages {
-		role := "user"
+		r := "user"
 		if msg.Role == "assistant" {
-			role = "model"
+			r = "model"
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  role,
-			"parts": buildGeminiParts(msg),
-		})
+		contents = append(contents, GemContent{Role: r, Parts: BuildGemPartsFromMessage(msg)})
 	}
 
-	// Build tools (Google format)
-	var googleTools []map[string]interface{}
-	if len(toolDefs) > 0 {
-		functionDeclarations := make([]map[string]interface{}, len(toolDefs))
-		for i, tool := range toolDefs {
-			functionDeclarations[i] = map[string]interface{}{
-				"name":        tool.Name,
-				"description": tool.Description,
-				"parameters":  tool.InputSchema,
-			}
-		}
-		googleTools = []map[string]interface{}{
-			{"functionDeclarations": functionDeclarations},
-		}
-	}
+	googleTools := GemToolDefsFromPoly(toolDefs)
 
 	model := p.config.Model
 	if model == "" {
@@ -138,21 +112,15 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 
 	// Agentic loop
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		genConfig := map[string]interface{}{
-			"maxOutputTokens": p.config.MaxTokens,
-		}
+		genConfig := &GemGenerationConfig{MaxOutputTokens: p.config.MaxTokens}
 		if thinkingMode {
-			genConfig["thinkingConfig"] = map[string]interface{}{
-				"thinkingBudget": 8192,
-			}
-		}
-		body := map[string]interface{}{
-			"contents":         contents,
-			"generationConfig": genConfig,
+			genConfig.ThinkingConfig = &GemThinkingConfig{ThinkingBudget: 8192}
 		}
 
-		if len(googleTools) > 0 {
-			body["tools"] = googleTools
+		body := GemRequestBody{
+			Contents:         contents,
+			GenerationConfig: genConfig,
+			Tools:            googleTools,
 		}
 
 		result, err := p.streamRequestPublicAPI(ctx, body, model, apiKey, eventChan)
@@ -179,30 +147,20 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 		}
 
 		// Build model response with function calls
-		modelParts := make([]map[string]interface{}, 0)
+		modelParts := make([]GemPart, 0, len(result.functionCalls)+1)
 		if result.content != "" {
-			modelParts = append(modelParts, map[string]interface{}{"text": result.content})
+			modelParts = append(modelParts, NewGemTextPart(result.content))
 		}
 		for _, fc := range result.functionCalls {
-			modelParts = append(modelParts, map[string]interface{}{
-				"functionCall": map[string]interface{}{
-					"name": fc.name,
-					"args": fc.args,
-				},
-			})
+			modelParts = append(modelParts, NewGemFunctionCallPart(fc.name, fc.args))
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  "model",
-			"parts": modelParts,
-		})
+		contents = append(contents, GemContent{Role: "model", Parts: modelParts})
 
 		// Execute functions and build response
-		functionResponses := make([]map[string]interface{}, 0, len(result.functionCalls))
+		responseParts := make([]GemPart, 0, len(result.functionCalls))
 		for i, fc := range result.functionCalls {
-			// Generate unique ID per call to avoid collisions when the same tool is called multiple times
 			callID := fmt.Sprintf("%s_%d", fc.name, i)
 
-			// Emit tool_use event before execution
 			eventChan <- StreamEvent{
 				Type: "tool_use",
 				ToolCall: &ToolCall{
@@ -214,7 +172,6 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 
 			toolResult := tools.Execute(fc.name, fc.args)
 
-			// Emit tool_result event after execution
 			eventChan <- StreamEvent{
 				Type: "tool_result",
 				ToolCall: &ToolCall{
@@ -229,21 +186,10 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 				},
 			}
 
-			functionResponses = append(functionResponses, map[string]interface{}{
-				"functionResponse": map[string]interface{}{
-					"name": fc.name,
-					"response": map[string]interface{}{
-						"content": toolResult.Content,
-					},
-				},
-			})
+			responseParts = append(responseParts, NewGemFunctionResponsePart(fc.name, toolResult.Content))
 		}
 
-		// Add function responses as user message
-		contents = append(contents, map[string]interface{}{
-			"role":  "user",
-			"parts": functionResponses,
-		})
+		contents = append(contents, GemContent{Role: "user", Parts: responseParts})
 	}
 
 	eventChan <- StreamEvent{
@@ -260,30 +206,6 @@ func (p *GeminiProvider) agenticLoopPublicAPI(ctx context.Context, initialMessag
 	}
 }
 
-// buildGeminiParts creates message parts with optional images (Google format)
-func buildGeminiParts(msg Message) []map[string]interface{} {
-	if len(msg.Images) == 0 {
-		return []map[string]interface{}{{"text": msg.Content}}
-	}
-
-	parts := make([]map[string]interface{}, 0, len(msg.Images)+1)
-
-	for _, img := range msg.Images {
-		parts = append(parts, map[string]interface{}{
-			"inlineData": map[string]interface{}{
-				"mimeType": img.MediaType,
-				"data":     base64.StdEncoding.EncodeToString(img.Data),
-			},
-		})
-	}
-
-	if msg.Content != "" {
-		parts = append(parts, map[string]interface{}{"text": msg.Content})
-	}
-
-	return parts
-}
-
 type geminiStreamResult struct {
 	content       string
 	thinking      string
@@ -297,7 +219,7 @@ type geminiFunctionCall struct {
 	args map[string]interface{}
 }
 
-func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body map[string]interface{}, model, apiKey string, eventChan chan<- StreamEvent) (*geminiStreamResult, error) {
+func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body interface{}, model, apiKey string, eventChan chan<- StreamEvent) (*geminiStreamResult, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -424,21 +346,18 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 	}
 
 	systemPrompt := BuildSystemPrompt("gemini", role)
-	contents := make([]map[string]interface{}, 0, len(messages)+2)
+	contents := make([]GemContent, 0, len(messages)+2)
 	contents = append(contents,
-		map[string]interface{}{"role": "user", "parts": []map[string]interface{}{{"text": systemPrompt}}},
-		map[string]interface{}{"role": "model", "parts": []map[string]interface{}{{"text": "Understood. I'm Gemini, chatting through Poly."}}},
+		GemContent{Role: "user", Parts: []GemPart{NewGemTextPart(systemPrompt)}},
+		GemContent{Role: "model", Parts: []GemPart{NewGemTextPart("Understood. I'm Gemini, chatting through Poly.")}},
 	)
 
 	for _, msg := range messages {
-		role := "user"
+		r := "user"
 		if msg.Role == "assistant" {
-			role = "model"
+			r = "model"
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  role,
-			"parts": buildGeminiParts(msg),
-		})
+		contents = append(contents, GemContent{Role: r, Parts: BuildGemPartsFromMessage(msg)})
 	}
 
 	model := p.config.Model
@@ -446,46 +365,29 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 		model = defaultCodeAssistModel
 	}
 
-	// Build tools (Google format)
-	var googleTools []map[string]interface{}
-	if len(toolDefs) > 0 {
-		functionDeclarations := make([]map[string]interface{}, len(toolDefs))
-		for i, tool := range toolDefs {
-			functionDeclarations[i] = map[string]interface{}{
-				"name":        tool.Name,
-				"description": tool.Description,
-				"parameters":  tool.InputSchema,
-			}
-		}
-		googleTools = []map[string]interface{}{
-			{"functionDeclarations": functionDeclarations},
-		}
-	}
+	googleTools := GemToolDefsFromPoly(toolDefs)
 
 	var fullContent strings.Builder
 	sessionID := generateUUID()
 
 	// Agentic loop
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
-		request := map[string]interface{}{
-			"contents":   contents,
-			"session_id": sessionID,
+		innerReq := GemCodeAssistInnerRequest{
+			Contents:  contents,
+			SessionID: sessionID,
+			Tools:     googleTools,
 		}
 		if thinkingMode {
-			request["generationConfig"] = map[string]interface{}{
-				"thinkingConfig": map[string]interface{}{
-					"thinkingBudget": 8192,
-				},
+			innerReq.GenerationConfig = &GemGenerationConfig{
+				ThinkingConfig: &GemThinkingConfig{ThinkingBudget: 8192},
 			}
 		}
-		if len(googleTools) > 0 {
-			request["tools"] = googleTools
-		}
-		body := map[string]interface{}{
-			"model":          model,
-			"project":        projectID,
-			"user_prompt_id": generateUUID(),
-			"request":        request,
+
+		body := GemCodeAssistBody{
+			Model:        model,
+			Project:      projectID,
+			UserPromptID: generateUUID(),
+			Request:      innerReq,
 		}
 
 		result, err := p.streamRequestCodeAssist(ctx, body, token, eventChan)
@@ -512,30 +414,20 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 		}
 
 		// Build model response with function calls
-		modelParts := make([]map[string]interface{}, 0)
+		modelParts := make([]GemPart, 0, len(result.functionCalls)+1)
 		if result.content != "" {
-			modelParts = append(modelParts, map[string]interface{}{"text": result.content})
+			modelParts = append(modelParts, NewGemTextPart(result.content))
 		}
 		for _, fc := range result.functionCalls {
-			modelParts = append(modelParts, map[string]interface{}{
-				"functionCall": map[string]interface{}{
-					"name": fc.name,
-					"args": fc.args,
-				},
-			})
+			modelParts = append(modelParts, NewGemFunctionCallPart(fc.name, fc.args))
 		}
-		contents = append(contents, map[string]interface{}{
-			"role":  "model",
-			"parts": modelParts,
-		})
+		contents = append(contents, GemContent{Role: "model", Parts: modelParts})
 
 		// Execute functions and build response
-		functionResponses := make([]map[string]interface{}, 0, len(result.functionCalls))
+		responseParts := make([]GemPart, 0, len(result.functionCalls))
 		for i, fc := range result.functionCalls {
-			// Generate unique ID per call to avoid collisions when the same tool is called multiple times
 			callID := fmt.Sprintf("%s_%d", fc.name, i)
 
-			// Emit tool_use event before execution
 			eventChan <- StreamEvent{
 				Type: "tool_use",
 				ToolCall: &ToolCall{
@@ -547,7 +439,6 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 
 			toolResult := tools.Execute(fc.name, fc.args)
 
-			// Emit tool_result event after execution
 			eventChan <- StreamEvent{
 				Type: "tool_result",
 				ToolCall: &ToolCall{
@@ -562,21 +453,10 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 				},
 			}
 
-			functionResponses = append(functionResponses, map[string]interface{}{
-				"functionResponse": map[string]interface{}{
-					"name": fc.name,
-					"response": map[string]interface{}{
-						"content": toolResult.Content,
-					},
-				},
-			})
+			responseParts = append(responseParts, NewGemFunctionResponsePart(fc.name, toolResult.Content))
 		}
 
-		// Add function responses as user message
-		contents = append(contents, map[string]interface{}{
-			"role":  "user",
-			"parts": functionResponses,
-		})
+		contents = append(contents, GemContent{Role: "user", Parts: responseParts})
 	}
 
 	eventChan <- StreamEvent{
@@ -594,7 +474,7 @@ func (p *GeminiProvider) streamCodeAssist(ctx context.Context, messages []Messag
 }
 
 // streamRequestCodeAssist makes a single request to Code Assist and parses the response
-func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body map[string]interface{}, token string, eventChan chan<- StreamEvent) (*geminiStreamResult, error) {
+func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body interface{}, token string, eventChan chan<- StreamEvent) (*geminiStreamResult, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -802,13 +682,13 @@ func (p *GeminiProvider) resolveCodeAssistProjectID(token string) (string, error
 		envProject = os.Getenv("GCLOUD_PROJECT")
 	}
 
-	body := map[string]interface{}{
-		"cloudaicompanionProject": envProject,
-		"metadata": map[string]interface{}{
-			"ideType":     "IDE_UNSPECIFIED",
-			"platform":    "PLATFORM_UNSPECIFIED",
-			"pluginType":  "GEMINI",
-			"duetProject": envProject,
+	body := GemLoadCodeAssistBody{
+		CloudAICompanionProject: envProject,
+		Metadata: GemLoadCodeAssistMetadata{
+			IDEType:     "IDE_UNSPECIFIED",
+			Platform:    "PLATFORM_UNSPECIFIED",
+			PluginType:  "GEMINI",
+			DuetProject: envProject,
 		},
 	}
 
