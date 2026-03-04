@@ -15,141 +15,78 @@ import (
 
 // handleStreamMsg processes a streaming event from a provider
 func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
-	// If streaming was cancelled, drain remaining events without processing
 	if !m.isStreaming {
 		streamEventChan = nil
 		return m, nil
 	}
-	if len(m.messages) > 0 {
-		lastIdx := len(m.messages) - 1
-		if msg.Error != nil {
-			// Check if it's an image support error
-			if llm.IsImageError(msg.Error) {
-				llm.SetImageSupport(msg.Provider, false)
-				m.messages[lastIdx].Content = ""
-				m.status = "Retrying without images..."
-				m.updateViewport()
-				return m, m.sendToProvider(msg.Provider, "")
-			}
-			m.messages[lastIdx].Content = "Error: " + msg.Error.Error()
-			m.status = "Error"
-			m.isStreaming = false
-			m.streamTokenCount = 0
-			m.statusBar.Update(status.SetStreamingMsg{Active: false})
-			m.saveLastMessage()
-			m.updateViewport()
-			return m, nil
-		} else if msg.Done {
-			// Collapse thinking block now that streaming is done
-			m.thinkingExpanded[lastIdx] = false
-
-			// Track tokens
-			m.updateTokenStats(msg)
-
-			// Track per-message tokens
-			m.messages[lastIdx].InputTokens = msg.InputTokens
-			m.messages[lastIdx].OutputTokens = msg.OutputTokens
-
-			// Show response time + streaming stats
-			if !m.streamStartTime.IsZero() {
-				elapsed := time.Since(m.streamStartTime)
-				m.status = fmt.Sprintf("Ready (%ds)", int(elapsed.Seconds()))
-				m.statusBar.Update(status.SetStreamingMsg{
-					Active:  false,
-					Elapsed: elapsed,
-					Tokens:  m.streamTokenCount,
-				})
-				m.streamStartTime = time.Time{}
-			} else {
-				m.status = "Ready"
-				m.statusBar.Update(status.SetStreamingMsg{
-					Active: false,
-				})
-			}
-			m.isStreaming = false
-			m.streamTokenCount = 0
-			m.saveLastMessage()
-			m.updateViewport()
-			m.syncStatusBar()
-			m.syncInfoPanel()
-
-			// Desktop notification
-			if m.notificationsOn {
-				notify.Send("Poly", msg.Provider+" finished responding")
-			}
-
-			// Auto-compaction: check if context is getting too large
-			llmMessages := m.buildLLMMessagesForCompaction()
-			if llm.NeedsCompaction(llmMessages, 0) && !m.isCompacting {
-				m.isCompacting = true
-				m.status = "Auto-compacting context..."
-				return m, func() tea.Msg { return CompactMsg{} }
-			}
-
-			return m, nil
-		} else {
-			// Handle tool_use: tool starting
-			if msg.ToolCall != nil && msg.ToolResult == nil {
-				toolIdx := len(m.messages[lastIdx].ToolCalls)
-				m.messages[lastIdx].ToolCalls = append(m.messages[lastIdx].ToolCalls, ToolCallData{
-					Name:   msg.ToolCall.Name,
-					Args:   msg.ToolCall.Arguments,
-					Status: 1, // running
-				})
-				m.messages[lastIdx].Blocks = append(m.messages[lastIdx].Blocks, ContentBlock{
-					Type:    "tool",
-					ToolIdx: toolIdx,
-				})
-				m.updateViewport()
-				return m, readStreamEvent(msg.Provider)
-			}
-
-			// Handle tool_result: tool finished
-			if msg.ToolCall != nil && msg.ToolResult != nil {
-				for i := len(m.messages[lastIdx].ToolCalls) - 1; i >= 0; i-- {
-					tc := &m.messages[lastIdx].ToolCalls[i]
-					if tc.Name == msg.ToolCall.Name && tc.Status == 1 {
-						tc.Result = msg.ToolResult.Content
-						tc.IsError = msg.ToolResult.IsError
-						if msg.ToolResult.IsError {
-							tc.Status = 3 // error
-						} else {
-							tc.Status = 2 // success
-						}
-						break
-					}
-				}
-				m.updateViewport()
-				return m, readStreamEvent(msg.Provider)
-			}
-
-			if msg.Thinking != "" && m.thinkingMode {
-				m.messages[lastIdx].Thinking += msg.Thinking
-			}
-			// Accumulate content (for persistence)
-			m.messages[lastIdx].Content += msg.Content
-			// Approximate token count (1 token ~ 4 chars)
-			if msg.Content != "" {
-				m.streamTokenCount += (len(msg.Content) + 3) / 4
-			}
-			// Track in ordered blocks (for inline rendering)
-			if msg.Content != "" {
-				blocks := m.messages[lastIdx].Blocks
-				if len(blocks) > 0 && blocks[len(blocks)-1].Type == "text" {
-					blocks[len(blocks)-1].Text += msg.Content
-					m.messages[lastIdx].Blocks = blocks
-				} else {
-					m.messages[lastIdx].Blocks = append(m.messages[lastIdx].Blocks, ContentBlock{
-						Type: "text",
-						Text: msg.Content,
-					})
-				}
-			}
-			m.updateViewport()
-			return m, readStreamEvent(msg.Provider)
-		}
+	if len(m.messages) == 0 {
+		return m, nil
 	}
-	return m, nil
+
+	lastIdx := len(m.messages) - 1
+
+	if msg.Error != nil {
+		if llm.IsImageError(msg.Error) {
+			llm.SetImageSupport(msg.Provider, false)
+			m.messages[lastIdx].Content = ""
+			m.status = "Retrying without images..."
+			m.updateViewport()
+			return m, m.sendToProvider(msg.Provider, "")
+		}
+		m.messages[lastIdx].Content = "Error: " + msg.Error.Error()
+		m.status = "Error"
+		m.isStreaming = false
+		m.streamTokenCount = 0
+		m.statusBar.Update(status.SetStreamingMsg{Active: false})
+		m.saveLastMessage()
+		m.updateViewport()
+		return m, nil
+	}
+
+	if msg.Done {
+		m.thinkingExpanded[lastIdx] = false
+		m.updateTokenStats(msg)
+		m.messages[lastIdx].InputTokens = msg.InputTokens
+		m.messages[lastIdx].OutputTokens = msg.OutputTokens
+
+		if !m.streamStartTime.IsZero() {
+			elapsed := time.Since(m.streamStartTime)
+			m.status = fmt.Sprintf("Ready (%ds)", int(elapsed.Seconds()))
+			m.statusBar.Update(status.SetStreamingMsg{
+				Active:  false,
+				Elapsed: elapsed,
+				Tokens:  m.streamTokenCount,
+			})
+			m.streamStartTime = time.Time{}
+		} else {
+			m.status = "Ready"
+			m.statusBar.Update(status.SetStreamingMsg{Active: false})
+		}
+		m.isStreaming = false
+		m.streamTokenCount = 0
+		m.saveLastMessage()
+		m.updateViewport()
+		m.syncStatusBar()
+		m.syncInfoPanel()
+
+		if m.notificationsOn {
+			notify.Send("Poly", msg.Provider+" finished responding")
+		}
+
+		llmMessages := m.buildLLMMessagesForCompaction()
+		if llm.NeedsCompaction(llmMessages, 0) && !m.isCompacting {
+			m.isCompacting = true
+			m.status = "Auto-compacting context..."
+			return m, func() tea.Msg { return CompactMsg{} }
+		}
+		return m, nil
+	}
+
+	// Shared logic for tool use, tool result, thinking and content
+	m.applyStreamEvent(lastIdx, msg.Content, msg.Thinking, msg.ToolCall, msg.ToolResult)
+
+	m.updateViewport()
+	return m, readStreamEvent(msg.Provider)
 }
 
 // handleTableRondeStreamMsg processes a Table Ronde streaming event
@@ -159,12 +96,7 @@ func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, te
 	}
 
 	idx, ok := m.tableRonde.messageIndices[msg.Provider]
-	if !ok {
-		return m, nil
-	}
-
-	// Bounds check to prevent panic
-	if idx < 0 || idx >= len(m.messages) {
+	if !ok || idx < 0 || idx >= len(m.messages) {
 		return m, nil
 	}
 
@@ -182,7 +114,6 @@ func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, te
 
 	if msg.Done {
 		m.tableRonde.activeProviders[msg.Provider] = false
-		// Track per-message tokens
 		m.messages[idx].InputTokens = msg.InputTokens
 		m.messages[idx].OutputTokens = msg.OutputTokens
 		m.saveMessageAt(idx)
@@ -190,30 +121,38 @@ func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, te
 		return m, m.checkRoundComplete()
 	}
 
+	// Shared logic for tool use, tool result, thinking and content
+	m.applyStreamEvent(idx, msg.Content, msg.Thinking, msg.ToolCall, msg.ToolResult)
+
+	m.updateViewport()
+	return m, readTableRondeEvent(msg.Provider, msg.Round)
+}
+
+// applyStreamEvent centralizes the logic for updating a message during streaming
+func (m *Model) applyStreamEvent(idx int, content, thinking string, toolCall *llm.ToolCall, toolResult *llm.ToolResult) {
 	// Handle tool_use: tool starting
-	if msg.ToolCall != nil && msg.ToolResult == nil {
+	if toolCall != nil && toolResult == nil {
 		toolIdx := len(m.messages[idx].ToolCalls)
 		m.messages[idx].ToolCalls = append(m.messages[idx].ToolCalls, ToolCallData{
-			Name:   msg.ToolCall.Name,
-			Args:   msg.ToolCall.Arguments,
+			Name:   toolCall.Name,
+			Args:   toolCall.Arguments,
 			Status: 1, // running
 		})
 		m.messages[idx].Blocks = append(m.messages[idx].Blocks, ContentBlock{
 			Type:    "tool",
 			ToolIdx: toolIdx,
 		})
-		m.updateViewport()
-		return m, readTableRondeEvent(msg.Provider, msg.Round)
+		return
 	}
 
 	// Handle tool_result: tool finished
-	if msg.ToolCall != nil && msg.ToolResult != nil {
+	if toolCall != nil && toolResult != nil {
 		for i := len(m.messages[idx].ToolCalls) - 1; i >= 0; i-- {
 			tc := &m.messages[idx].ToolCalls[i]
-			if tc.Name == msg.ToolCall.Name && tc.Status == 1 {
-				tc.Result = msg.ToolResult.Content
-				tc.IsError = msg.ToolResult.IsError
-				if msg.ToolResult.IsError {
+			if tc.Name == toolCall.Name && tc.Status == 1 {
+				tc.Result = toolResult.Content
+				tc.IsError = toolResult.IsError
+				if toolResult.IsError {
 					tc.Status = 3 // error
 				} else {
 					tc.Status = 2 // success
@@ -221,32 +160,38 @@ func (m Model) handleTableRondeStreamMsg(msg TableRondeStreamMsg) (tea.Model, te
 				break
 			}
 		}
-		m.updateViewport()
-		return m, readTableRondeEvent(msg.Provider, msg.Round)
+		return
 	}
 
 	// Handle thinking
-	if msg.Thinking != "" && m.thinkingMode {
-		m.messages[idx].Thinking += msg.Thinking
+	if thinking != "" && m.thinkingMode {
+		m.messages[idx].Thinking += thinking
 	}
 
 	// Accumulate content
-	m.messages[idx].Content += msg.Content
-	if msg.Content != "" {
+	if content != "" {
+		m.messages[idx].Content += content
+		// Update stream token count (only used for non-Table Ronde UI stats)
+		if !m.isStreamingTableRonde() {
+			m.streamTokenCount += (len(content) + 3) / 4
+		}
+
 		blocks := m.messages[idx].Blocks
 		if len(blocks) > 0 && blocks[len(blocks)-1].Type == "text" {
-			blocks[len(blocks)-1].Text += msg.Content
+			blocks[len(blocks)-1].Text += content
 			m.messages[idx].Blocks = blocks
 		} else {
 			m.messages[idx].Blocks = append(m.messages[idx].Blocks, ContentBlock{
 				Type: "text",
-				Text: msg.Content,
+				Text: content,
 			})
 		}
 	}
+}
 
-	m.updateViewport()
-	return m, readTableRondeEvent(msg.Provider, msg.Round)
+// isStreamingTableRonde returns true if @all Table Ronde is active
+func (m *Model) isStreamingTableRonde() bool {
+	return m.tableRonde != nil
 }
 
 // checkRoundComplete checks if all providers are done in the current round
@@ -254,18 +199,15 @@ func (m *Model) checkRoundComplete() tea.Cmd {
 	if m.tableRonde == nil {
 		return nil
 	}
-	// Check if all active providers are done
 	for _, active := range m.tableRonde.activeProviders {
 		if active {
-			return nil // still streaming
+			return nil
 		}
 	}
-	// All done — check for @mentions
 	mentions := m.extractMentions()
 	if len(mentions) > 0 && m.tableRonde.round < m.tableRonde.maxRounds {
 		return m.startNextRound(mentions)
 	}
-	// No mentions or max rounds reached — finish
 	m.finishTableRonde()
 	return nil
 }
@@ -284,17 +226,15 @@ func (m *Model) updateTokenStats(msg StreamMsg) {
 	if msg.CacheReadTokens > 0 {
 		m.sessionCacheReadTokens += msg.CacheReadTokens
 	}
-	// Calculate cost (with cache discount for Anthropic)
 	m.sessionCost = calculateCostWithCache(m.sessionInputTokens, m.sessionOutputTokens, m.sessionCacheCreationTokens, m.sessionCacheReadTokens, m.defaultProvider)
 
-	// Per-provider cost
 	if msg.Provider != "" {
 		provCost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider)
 		m.providerCosts[msg.Provider] += provCost
 	}
 }
 
-// handleCompactMsg starts the compaction process in a goroutine
+// handleCompactMsg starts the compaction process
 func (m Model) handleCompactMsg() (tea.Model, tea.Cmd) {
 	p, ok := m.providers[m.defaultProvider]
 	if !ok || !p.IsConfigured() {
@@ -303,7 +243,6 @@ func (m Model) handleCompactMsg() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Build LLM messages from current chat
 	llmMessages := m.buildLLMMessagesForCompaction()
 
 	return m, func() tea.Msg {
@@ -323,7 +262,6 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 
 	oldCount := len(m.messages)
 
-	// Convert LLM messages back to TUI messages
 	newMessages := make([]Message, 0, len(msg.Messages))
 	for _, lm := range msg.Messages {
 		role := lm.Role
@@ -339,8 +277,15 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.messages = newMessages
+	_ = session.SetMessages(m.toSessionMsgs())
 
-	// Re-persist the compacted session (use SetMessages to keep same session)
+	m.updateViewport()
+	m.status = fmt.Sprintf("Context compacted (%d -> %d messages)", oldCount, len(m.messages))
+	return m, nil
+}
+
+// toSessionMsgs converts TUI messages to session messages for persistence
+func (m *Model) toSessionMsgs() []session.Message {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
 		sessionMsgs[i] = session.Message{
@@ -351,14 +296,10 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 			OutputTokens: msg.OutputTokens,
 		}
 	}
-	_ = session.SetMessages(sessionMsgs)
-
-	m.updateViewport()
-	m.status = fmt.Sprintf("Context compacted (%d -> %d messages)", oldCount, len(m.messages))
-	return m, nil
+	return sessionMsgs
 }
 
-// buildLLMMessagesForCompaction converts TUI messages to LLM messages for token estimation
+// buildLLMMessagesForCompaction converts TUI messages to LLM messages
 func (m *Model) buildLLMMessagesForCompaction() []llm.Message {
 	llmMessages := make([]llm.Message, 0, len(m.messages))
 	for _, msg := range m.messages {
