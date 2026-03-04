@@ -123,36 +123,42 @@ func main() {
 
 	// Check if shell mode is requested
 	if *shellMode || *interactiveMode {
-		runShell()
+		if err := runShell(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running shell: %v\n", err)
+			if mcp.Global != nil {
+				mcp.Global.Close()
+			}
+			os.Exit(1)
+		}
 		return
 	}
 
 	// Default: run TUI
-	runTUI()
+	if err := runTUI(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running Poly: %v\n", err)
+		if mcp.Global != nil {
+			mcp.Global.Close()
+		}
+		os.Exit(1)
+	}
 }
 
-func runShell() {
+func runShell() error {
 	sh, err := shell.New()
 	if err != nil {
-		fmt.Printf("Error creating shell: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer sh.Close()
 
-	if err := sh.Run(); err != nil {
-		fmt.Printf("Error running shell: %v\n", err)
-		os.Exit(1)
-	}
+	return sh.Run()
 }
 
-func runTUI() {
+func runTUI() error {
 	p := tea.NewProgram(
 		tui.New(),
 		// AltScreen and MouseMode are now set via tea.View in View()
 	)
 
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running Poly: %v\n", err)
-		os.Exit(1)
-	}
+	_, err := p.Run()
+	return err
 }

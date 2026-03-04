@@ -79,7 +79,7 @@ func RevertLast() (string, error) {
 	last := backups[len(backups)-1]
 	backups = backups[:len(backups)-1]
 
-	if err := os.WriteFile(last.Path, last.Content, 0644); err != nil {
+	if err := os.WriteFile(last.Path, last.Content, 0600); err != nil {
 		return last.Path, fmt.Errorf("failed to restore %s: %w", last.Path, err)
 	}
 
@@ -97,7 +97,7 @@ func RevertFile(path string) error {
 			// Remove this backup entry
 			backups = append(backups[:i], backups[i+1:]...)
 
-			if err := os.WriteFile(b.Path, b.Content, 0644); err != nil {
+			if err := os.WriteFile(b.Path, b.Content, 0600); err != nil {
 				return fmt.Errorf("failed to restore %s: %w", b.Path, err)
 			}
 			return nil

@@ -60,7 +60,7 @@ func (t *MemoryWriteTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	if mode == "replace" {
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			return ToolResult{Content: fmt.Sprintf("Error writing MEMORY.md: %v", err), IsError: true}
 		}
 		return ToolResult{Content: fmt.Sprintf("Replaced MEMORY.md (%d bytes)", len(content))}

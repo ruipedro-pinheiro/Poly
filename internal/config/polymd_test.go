@@ -25,7 +25,7 @@ func TestLoadPolyMD(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte("project instructions"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte("project instructions"), 0600)
 
 		result := LoadPolyMD()
 		if result != "project instructions" {
@@ -39,7 +39,7 @@ func TestLoadPolyMD(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		os.WriteFile(filepath.Join(tmpDir, "poly.md"), []byte("lowercase variant"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "poly.md"), []byte("lowercase variant"), 0600)
 
 		result := LoadPolyMD()
 		if result != "lowercase variant" {
@@ -54,7 +54,7 @@ func TestLoadPolyMD(t *testing.T) {
 		os.Chdir(tmpDir)
 
 		os.MkdirAll(filepath.Join(tmpDir, ".poly"), 0755)
-		os.WriteFile(filepath.Join(tmpDir, ".poly", "POLY.md"), []byte("dotpoly variant"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, ".poly", "POLY.md"), []byte("dotpoly variant"), 0600)
 
 		result := LoadPolyMD()
 		if result != "dotpoly variant" {
@@ -71,8 +71,8 @@ func TestLoadPolyMD(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(childDir)
 
-		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte("parent"), 0644)
-		os.WriteFile(filepath.Join(childDir, "POLY.md"), []byte("child"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte("parent"), 0600)
+		os.WriteFile(filepath.Join(childDir, "POLY.md"), []byte("child"), 0600)
 
 		result := LoadPolyMD()
 		// Root first, cwd last, separated by ---
@@ -88,7 +88,7 @@ func TestLoadPolyMD(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte(""), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "POLY.md"), []byte(""), 0600)
 
 		result := LoadPolyMD()
 		if result != "" {

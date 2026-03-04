@@ -80,7 +80,7 @@ func TestLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -443,7 +443,7 @@ func TestLoadConfig_InvalidJSON(t *testing.T) {
 	configDir = tmpDir
 
 	// Write invalid JSON
-	os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("not json"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("not json"), 0600)
 
 	cfg, err := Load()
 	if err != nil {

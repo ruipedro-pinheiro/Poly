@@ -1215,7 +1215,7 @@ func (m *Model) handleCostsExport(format string) {
 			m.status = "Export failed: " + err.Error()
 			return
 		}
-		if err := os.WriteFile(path, data, 0644); err != nil {
+		if err := os.WriteFile(path, data, 0600); err != nil {
 			m.status = "Export failed: " + err.Error()
 			return
 		}
@@ -1227,7 +1227,7 @@ func (m *Model) handleCostsExport(format string) {
 		for _, e := range entries {
 			b.WriteString(fmt.Sprintf("%d,%s,%d,%d,%.6f\n", e.Index, e.Provider, e.InputTokens, e.OutputTokens, e.Cost))
 		}
-		if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(b.String()), 0600); err != nil {
 			m.status = "Export failed: " + err.Error()
 			return
 		}

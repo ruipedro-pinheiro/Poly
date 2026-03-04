@@ -87,7 +87,7 @@ func TestEditFileTool_Execute_MissingPath(t *testing.T) {
 func TestEditFileTool_Execute_ExactReplace(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("hello world"), 0644)
+	os.WriteFile(testFile, []byte("hello world"), 0600)
 
 	tool := &EditFileTool{}
 	result := tool.Execute(map[string]interface{}{
@@ -111,7 +111,7 @@ func TestEditFileTool_Execute_ExactReplace(t *testing.T) {
 func TestEditFileTool_Execute_ReplaceAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("foo bar foo baz foo"), 0644)
+	os.WriteFile(testFile, []byte("foo bar foo baz foo"), 0600)
 
 	tool := &EditFileTool{}
 	result := tool.Execute(map[string]interface{}{
@@ -133,7 +133,7 @@ func TestEditFileTool_Execute_ReplaceAll(t *testing.T) {
 func TestEditFileTool_Execute_MultipleMatchNoReplaceAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("foo bar foo"), 0644)
+	os.WriteFile(testFile, []byte("foo bar foo"), 0600)
 
 	tool := &EditFileTool{}
 	result := tool.Execute(map[string]interface{}{
@@ -152,7 +152,7 @@ func TestEditFileTool_Execute_MultipleMatchNoReplaceAll(t *testing.T) {
 func TestEditFileTool_Execute_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("hello world"), 0644)
+	os.WriteFile(testFile, []byte("hello world"), 0600)
 
 	tool := &EditFileTool{}
 	result := tool.Execute(map[string]interface{}{
@@ -172,7 +172,7 @@ func TestEditFileTool_Execute_FuzzyMatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 	// File has extra spaces
-	os.WriteFile(testFile, []byte("hello    world    here"), 0644)
+	os.WriteFile(testFile, []byte("hello    world    here"), 0600)
 
 	tool := &EditFileTool{}
 	result := tool.Execute(map[string]interface{}{

@@ -39,7 +39,7 @@ func TestLoadMemoryMD(t *testing.T) {
 
 		polyDir := filepath.Join(tmpDir, ".poly")
 		os.MkdirAll(polyDir, 0755)
-		os.WriteFile(filepath.Join(polyDir, "MEMORY.md"), []byte("remembered stuff"), 0644)
+		os.WriteFile(filepath.Join(polyDir, "MEMORY.md"), []byte("remembered stuff"), 0600)
 
 		result := LoadMemoryMD()
 		if result != "remembered stuff" {
@@ -58,7 +58,7 @@ func TestClearMemoryMD(t *testing.T) {
 		polyDir := filepath.Join(tmpDir, ".poly")
 		os.MkdirAll(polyDir, 0755)
 		memPath := filepath.Join(polyDir, "MEMORY.md")
-		os.WriteFile(memPath, []byte("to be cleared"), 0644)
+		os.WriteFile(memPath, []byte("to be cleared"), 0600)
 
 		err := ClearMemoryMD()
 		if err != nil {

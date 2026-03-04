@@ -95,7 +95,7 @@ func (t *TodosTool) Execute(args map[string]interface{}) ToolResult {
 	if err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error marshaling: %v", err), IsError: true}
 	}
-	if err := os.WriteFile(todosPath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(todosPath, jsonData, 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing: %v", err), IsError: true}
 	}
 

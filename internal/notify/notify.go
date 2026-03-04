@@ -12,7 +12,9 @@ func Send(title, body string) {
 	case "linux":
 		_ = exec.Command("notify-send", title, body).Start()
 	case "darwin":
-		_ = exec.Command("osascript", "-e",
-			`display notification "`+body+`" with title "`+title+`"`).Start()
+		script := `on run argv
+	display notification (item 1 of argv) with title (item 2 of argv)
+end run`
+		_ = exec.Command("osascript", "-e", script, body, title).Start()
 	}
 }

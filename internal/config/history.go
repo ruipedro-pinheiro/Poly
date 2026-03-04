@@ -61,8 +61,8 @@ func AddHistory(entry string) {
 
 	// Truncate if over limit
 	if len(existing)+1 > maxHistoryEntries {
-		trimmed := append(existing, entry)
-		trimmed = trimmed[len(trimmed)-maxHistoryEntries:]
+		existing = append(existing, entry)
+		trimmed := existing[len(existing)-maxHistoryEntries:]
 		_ = os.WriteFile(historyPath(), []byte(strings.Join(trimmed, "\n")+"\n"), 0600)
 	}
 }

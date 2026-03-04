@@ -122,7 +122,7 @@ func tryExactMatch(content, oldString, newString string, replaceAll bool, path, 
 		newContent = strings.Replace(content, oldString, newString, 1)
 	}
 
-	if err := os.WriteFile(absPath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(newContent), 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}, true
 	}
 
@@ -156,7 +156,7 @@ func tryFuzzyMatch(content, oldString, newString, path, absPath string) (ToolRes
 	originalBlock := content[origStart:origEnd]
 	newContent := content[:origStart] + newString + content[origEnd:]
 
-	if err := os.WriteFile(absPath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(newContent), 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}, true
 	}
 
@@ -218,7 +218,7 @@ func tryLineMatch(content, oldString, newString, path, absPath string) (ToolResu
 	}
 	newContent := strings.Join(parts, "\n")
 
-	if err := os.WriteFile(absPath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(newContent), 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}, true
 	}
 
@@ -274,12 +274,6 @@ func mapNormalizedRange(original string, normStart, normEnd int) (int, int) {
 				inWhitespace = true
 			}
 			// Additional whitespace chars: consumed in original, no normalized advance
-		} else if b == '\n' {
-			if normIdx == normStart && origStart == -1 {
-				origStart = i
-			}
-			normIdx++
-			inWhitespace = false
 		} else {
 			if normIdx == normStart && origStart == -1 {
 				origStart = i

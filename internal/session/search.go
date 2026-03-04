@@ -2,7 +2,6 @@ package session
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -125,7 +124,7 @@ func extractSnippet(content string, matchIdx, matchLen, totalLen int) string {
 
 // CountSessions returns the total number of saved sessions
 func CountSessions() int {
-	dir := filepath.Join(sessionDir)
+	dir := sessionDir
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0

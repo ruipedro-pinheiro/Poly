@@ -173,7 +173,7 @@ func (t *ApplyDiffTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	// Write the new content
-	if err := os.WriteFile(absPath, []byte(proposal.NewContent), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(proposal.NewContent), 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}
 	}
 

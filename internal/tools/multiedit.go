@@ -120,7 +120,7 @@ func (t *MultieditTool) Execute(args map[string]interface{}) ToolResult {
 		// Generate diff
 		diff := GenerateUnifiedDiff(op.content, newContent, op.relPath)
 
-		if err := os.WriteFile(op.absPath, []byte(newContent), 0644); err != nil {
+		if err := os.WriteFile(op.absPath, []byte(newContent), 0600); err != nil {
 			results.WriteString(fmt.Sprintf("\n\n--- %s ---\nERROR: %v", op.relPath, err))
 		} else {
 			successCount++

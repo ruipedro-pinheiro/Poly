@@ -85,6 +85,7 @@ func StartOAuthFlow(cfg OAuthConfig, callbackPort int) (*OAuthTokens, string, er
 	}
 
 	server := &http.Server{
+		ReadHeaderTimeout: 3 * time.Second,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasPrefix(r.URL.Path, "/callback") && r.URL.Path != "/" {
 				http.NotFound(w, r)

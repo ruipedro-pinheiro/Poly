@@ -72,7 +72,7 @@ func (t *WriteFileTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	// Write file
-	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(content), 0600); err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}
 	}
 
