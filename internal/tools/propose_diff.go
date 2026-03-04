@@ -118,7 +118,7 @@ func (t *ProposeDiffTool) Execute(args map[string]interface{}) ToolResult {
 	output += diff
 	output += fmt.Sprintf("\n\nTo apply: use apply_diff with id '%s'", id)
 	output += fmt.Sprintf("\nTo reject: use reject_diff with id '%s'", id)
-	output += fmt.Sprintf("\nTo list all: use list_diffs")
+	output += "\nTo list all: use list_diffs"
 
 	return ToolResult{Content: output}
 }
@@ -243,7 +243,7 @@ func (t *ListDiffsTool) Description() string {
 
 func (t *ListDiffsTool) Parameters() map[string]interface{} {
 	return map[string]interface{}{
-		"type": "object",
+		"type":       "object",
 		"properties": map[string]interface{}{},
 	}
 }

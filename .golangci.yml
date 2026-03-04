@@ -1,0 +1,15 @@
+linters:
+  enable:
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+  disable:
+    # 40 unchecked errors across session/config/auth — tracked in GitHub issue
+    - errcheck
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10

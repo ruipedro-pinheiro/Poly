@@ -234,15 +234,6 @@ func (m *Model) syncInfoPanel() {
 	m.infoPanelCmp.SetSandboxMode(sandbox.Enabled)
 }
 
-// setStatus sets a status message on both the legacy field and the component
-func (m *Model) setStatus(msg string) {
-	m.status = msg
-	m.statusBar.Update(status.InfoMsg{
-		Type: status.InfoTypeInfo,
-		Msg:  msg,
-	})
-}
-
 // calculateCost calculates the session cost using the pricing table
 func calculateCost(inputTokens, outputTokens int, provider string) float64 {
 	p, ok := llm.GetProvider(provider)

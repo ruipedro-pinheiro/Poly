@@ -8,21 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
 // OpenAI OAuth config (from Codex CLI, public client)
 const (
-	OpenAIClientID    = "app_EMoamEEZ73f0CkXaXp7hrann"
+	OpenAIClientID     = "app_EMoamEEZ73f0CkXaXp7hrann"
 	OpenAIAuthorizeURL = "https://auth.openai.com/oauth/authorize"
 	OpenAITokenURL     = "https://auth.openai.com/oauth/token"
 	OpenAICallbackPort = 1455
-)
-
-var (
-	openaiPendingPKCE   *PKCECodes
-	openaiPendingPKCEMu sync.Mutex
 )
 
 // StartOpenAIOAuth starts the OAuth flow for OpenAI
@@ -31,9 +25,6 @@ func StartOpenAIOAuth() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate PKCE: %w", err)
 	}
-	openaiPendingPKCEMu.Lock()
-	openaiPendingPKCE = pkce
-	openaiPendingPKCEMu.Unlock()
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", OpenAICallbackPort)
 	state, err := GenerateState()
@@ -42,16 +33,16 @@ func StartOpenAIOAuth() (string, error) {
 	}
 
 	params := url.Values{
-		"response_type":           {"code"},
-		"client_id":               {OpenAIClientID},
-		"redirect_uri":            {redirectURI},
-		"scope":                   {"openid profile email offline_access model.request"},
-		"code_challenge":          {pkce.Challenge},
-		"code_challenge_method":   {"S256"},
+		"response_type":              {"code"},
+		"client_id":                  {OpenAIClientID},
+		"redirect_uri":               {redirectURI},
+		"scope":                      {"openid profile email offline_access model.request"},
+		"code_challenge":             {pkce.Challenge},
+		"code_challenge_method":      {"S256"},
 		"id_token_add_organizations": {"true"},
 		"codex_cli_simplified_flow":  {"true"},
-		"state":                   {state},
-		"originator":              {"poly"},
+		"state":                      {state},
+		"originator":                 {"poly"},
 	}
 
 	authURL := OpenAIAuthorizeURL + "?" + params.Encode()
@@ -74,16 +65,16 @@ func StartOpenAIOAuthWithCallback() (*OAuthTokens, error) {
 	}
 
 	params := url.Values{
-		"response_type":           {"code"},
-		"client_id":               {OpenAIClientID},
-		"redirect_uri":            {redirectURI},
-		"scope":                   {"openid profile email offline_access model.request"},
-		"code_challenge":          {pkce.Challenge},
-		"code_challenge_method":   {"S256"},
+		"response_type":              {"code"},
+		"client_id":                  {OpenAIClientID},
+		"redirect_uri":               {redirectURI},
+		"scope":                      {"openid profile email offline_access model.request"},
+		"code_challenge":             {pkce.Challenge},
+		"code_challenge_method":      {"S256"},
 		"id_token_add_organizations": {"true"},
 		"codex_cli_simplified_flow":  {"true"},
-		"state":                   {state},
-		"originator":              {"poly"},
+		"state":                      {state},
+		"originator":                 {"poly"},
 	}
 
 	authURL := OpenAIAuthorizeURL + "?" + params.Encode()

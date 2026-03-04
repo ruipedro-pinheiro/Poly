@@ -23,8 +23,8 @@ var (
 
 // tableRondeStreamChans stores channels for @all Table Ronde streaming (protected by trChansMu)
 var (
-	tableRondeStreamChans   = make(map[string]<-chan llm.StreamEvent)
-	trChansMu               sync.RWMutex
+	tableRondeStreamChans = make(map[string]<-chan llm.StreamEvent)
+	trChansMu             sync.RWMutex
 )
 
 // getStreamChan safely reads a channel from the Table Ronde map
@@ -56,11 +56,7 @@ func getToolDefinitions() []llm.ToolDefinition {
 	toolDefs := tools.GetDefinitions()
 	result := make([]llm.ToolDefinition, len(toolDefs))
 	for i, t := range toolDefs {
-		result[i] = llm.ToolDefinition{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: t.InputSchema,
-		}
+		result[i] = llm.ToolDefinition(t)
 	}
 	return result
 }
@@ -603,4 +599,3 @@ func startOAuthForProvider(provider string) tea.Cmd {
 		return OAuthResultMsg{Provider: provider, Success: true}
 	}
 }
-

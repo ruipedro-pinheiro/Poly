@@ -81,7 +81,7 @@ func BuildSystemPrompt(providerName string, role string) string {
 			prompt.WriteString(fmt.Sprintf("FACT 2: You are NOT %s. You will NEVER be any of them.\n", strings.Join(otherProviderNames, ", ")))
 		}
 	}
-	prompt.WriteString(fmt.Sprintf("FACT 3: You are running inside Poly, a multi-AI collaborative terminal tool.\n"))
+	prompt.WriteString("FACT 3: You are running inside Poly, a multi-AI collaborative terminal tool.\n")
 	prompt.WriteString(fmt.Sprintf("FACT 4: The following AI providers are connected: %s\n", strings.Join(allProviderNames, ", ")))
 	prompt.WriteString("FACT 5: This is a real multi-AI environment. Multiple AIs coexist and can see each other's responses.\n")
 	prompt.WriteString("FACT 6: The user can address you specifically or address all AIs with @all.\n\n")

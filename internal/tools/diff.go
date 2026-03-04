@@ -27,11 +27,6 @@ func GenerateUnifiedDiff(oldContent, newContent, filename string) string {
 func computeDiffChunks(oldLines, newLines []string) []string {
 	var chunks []string
 
-	maxLen := len(oldLines)
-	if len(newLines) > maxLen {
-		maxLen = len(newLines)
-	}
-
 	i, j := 0, 0
 	for i < len(oldLines) || j < len(newLines) {
 		// Find matching lines (context)
