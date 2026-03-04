@@ -36,12 +36,13 @@ type DeviceFlowResponse struct {
 // Returns the device flow info (user code, verification URL) for display in the TUI.
 // The browser is opened automatically to the verification URL.
 func StartCopilotDeviceFlow() (*DeviceFlowResponse, error) {
+	ctx := context.Background()
 	form := url.Values{
 		"client_id": {CopilotClientID},
 		"scope":     {""},
 	}
 
-	req, err := http.NewRequest("POST", CopilotDeviceCodeURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", CopilotDeviceCodeURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +145,7 @@ func PollCopilotDeviceFlow(ctx context.Context, deviceCode string, interval int)
 				return nil, fmt.Errorf("empty access token in response")
 			}
 			// Exchange GitHub token for Copilot session token
-			return getCopilotSessionToken(result.AccessToken)
+			return getCopilotSessionToken(ctx, result.AccessToken)
 		default:
 			return nil, fmt.Errorf("unexpected error: %s", result.Error)
 		}
@@ -153,8 +154,8 @@ func PollCopilotDeviceFlow(ctx context.Context, deviceCode string, interval int)
 
 // getCopilotSessionToken exchanges a GitHub token for a Copilot session token.
 // The GitHub token is stored as RefreshToken for future session token refreshes.
-func getCopilotSessionToken(githubToken string) (*OAuthTokens, error) {
-	req, err := http.NewRequest("GET", CopilotTokenURL, nil)
+func getCopilotSessionToken(ctx context.Context, githubToken string) (*OAuthTokens, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", CopilotTokenURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -202,5 +203,5 @@ func getCopilotSessionToken(githubToken string) (*OAuthTokens, error) {
 // The GitHub token (stored as RefreshToken) is long-lived.
 // The Copilot session token expires every ~30 minutes.
 func RefreshCopilotToken(githubToken string) (*OAuthTokens, error) {
-	return getCopilotSessionToken(githubToken)
+	return getCopilotSessionToken(context.Background(), githubToken)
 }

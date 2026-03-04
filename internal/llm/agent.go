@@ -25,8 +25,8 @@ type RequestHandler func(ctx context.Context, history []Message, eventChan chan<
 // RunAgenticLoop is the universal brain of Poly. It handles the multi-turn 
 // tool execution loop for ANY provider.
 func RunAgenticLoop(ctx context.Context, providerName string, model string, initialMessages []Message, toolDefs []ToolDefinition, eventChan chan<- StreamEvent, requestHandler RequestHandler) {
-	history := make([]Message, len(initialMessages))
-	copy(history, initialMessages)
+	history := make([]Message, 0, len(initialMessages)+8)
+	history = append(history, initialMessages...)
 
 	var fullContent strings.Builder
 

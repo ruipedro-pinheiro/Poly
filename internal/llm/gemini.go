@@ -426,7 +426,7 @@ func (p *GeminiProvider) resolveCodeAssistProjectID(token string) (string, error
 		},
 	}
 	jsonBody, _ := json.Marshal(body)
-	req, err := http.NewRequest("POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", codeAssistEndpoint+":loadCodeAssist", bytes.NewReader(jsonBody))
 	if err != nil {
 		return "", err
 	}

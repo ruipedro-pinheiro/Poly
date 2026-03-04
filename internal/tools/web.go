@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -55,8 +56,10 @@ func (t *WebFetchTool) Execute(args map[string]interface{}) ToolResult {
 		return ToolResult{Content: "Error: cannot fetch from private/localhost addresses", IsError: true}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	client := &http.Client{
-		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
@@ -65,7 +68,7 @@ func (t *WebFetchTool) Execute(args map[string]interface{}) ToolResult {
 		},
 	}
 
-	req, err := http.NewRequest("GET", rawURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}
@@ -133,8 +136,16 @@ func (t *WebSearchTool) Execute(args map[string]interface{}) ToolResult {
 	searchURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1",
 		url.QueryEscape(query))
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Get(searchURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+	if err != nil {
+		return ToolResult{Content: fmt.Sprintf("Error creating request: %v", err), IsError: true}
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return ToolResult{Content: fmt.Sprintf("Error: %v", err), IsError: true}
 	}

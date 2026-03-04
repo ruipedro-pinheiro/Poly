@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -30,8 +31,16 @@ func CheckForUpdate() string {
 		return ""
 	}
 
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Get(githubReleasesURL)
+	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", githubReleasesURL, nil)
+	if err != nil {
+		return ""
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return ""
 	}

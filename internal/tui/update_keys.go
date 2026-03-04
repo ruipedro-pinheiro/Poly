@@ -16,18 +16,43 @@ import (
 
 // handleKeyMsg dispatches keyboard input to the appropriate view handler
 func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// 1. Handle special inputs like paste and raw text
+	if cmd, done := m.handleRawInput(msg); done {
+		return m, cmd
+	}
+
+	// 2. Handle view-specific modal keys
+	if newM, cmd, done := m.handleViewSpecificKeys(msg); done {
+		return newM, cmd
+	}
+
+	// 3. Streaming guard: don't process keys while streaming (except quit/cancel)
+	if m.isStreaming && !key.Matches(msg, m.keys.Quit) && !key.Matches(msg, m.keys.Cancel) {
+		return m, nil
+	}
+
+	// 4. Handle global shortcuts
+	if newM, cmd, done := m.handleGlobalKeys(msg); done {
+		return newM, cmd
+	}
+
+	// 5. Handle chat-specific navigation and actions
+	return m.handleChatInputKeys(msg)
+}
+
+func (m *Model) handleRawInput(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	// Handle pasted text via msg.Text
 	if msg.Text != "" && len(msg.Text) > 1 {
 		if m.state == viewControlRoom && (m.oauthPending != "" || m.apiKeyPending != "") {
 			m.authInput = strings.TrimSpace(msg.Text)
-			return m, nil
+			return nil, true
 		}
 		if m.state == viewChat {
 			m.textarea.InsertString(msg.Text)
 			m.syncTextareaHeight()
-			return m, nil
+			return nil, true
 		}
-		return m, nil
+		return nil, true
 	}
 
 	// Handle Ctrl+V
@@ -36,62 +61,64 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pendingImages = append(m.pendingImages, imgData)
 			m.pendingImageTypes = append(m.pendingImageTypes, mediaType)
 			m.status = fmt.Sprintf("[img] %d image(s) attached", len(m.pendingImages))
-			return m, nil
+			return nil, true
 		}
 		text := getClipboardContent()
 		if text != "" {
 			m.textarea.InsertString(text)
 			m.syncTextareaHeight()
 		}
-		return m, nil
+		return nil, true
 	}
+	return nil, false
+}
 
-	// Splash screen
-	if m.state == viewSplash {
+func (m Model) handleViewSpecificKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	switch m.state {
+	case viewSplash:
 		if key.Matches(msg, m.keys.Quit) {
-			return m, tea.Quit
+			return m, tea.Quit, true
 		}
 		m.state = viewChat
-		return m, nil
+		return m, nil, true
+
+	case viewApproval:
+		newM, cmd := m.handleApprovalKey(msg)
+		return newM, cmd, true
+
+	case viewSessionList:
+		newM, _ := m.handleSessionListKey(msg.String())
+		return newM, nil, true
+
+	case viewCommandPalette:
+		newM, cmd := m.handlePaletteKey(msg)
+		return newM, cmd, true
+
+	case viewModelPicker:
+		newM, cmd := m.handleModelPickerKey(msg)
+		return newM, cmd, true
+
+	case viewAddProvider:
+		newM, cmd := m.handleAddProviderKey(msg)
+		return newM, cmd, true
 	}
 
-	// Approval dialog handling - MUST be before streaming guard
-	// because tools request approval during streaming
-	if m.state == viewApproval {
-		return m.handleApprovalKey(msg)
+	// Sub-state in Control Room
+	if m.state == viewControlRoom && (m.oauthPending != "" || m.apiKeyPending != "") {
+		newM, cmd := m.handleAuthInputKey(msg)
+		return newM, cmd, true
 	}
 
-	// Don't process keys while streaming (except quit/cancel)
-	if m.isStreaming && !key.Matches(msg, m.keys.Quit) && !key.Matches(msg, m.keys.Cancel) {
-		return m, nil
-	}
+	return m, nil, false
+}
 
-	// Session list handling
-	if m.state == viewSessionList {
-		newM, done := m.handleSessionListKey(msg.String())
-		if done {
-			return newM, nil
-		}
-		return newM, nil
-	}
-
-	// Command Palette input handling
-	if m.state == viewCommandPalette {
-		return m.handlePaletteKey(msg)
-	}
-
-	// Model Picker filter handling
-	if m.state == viewModelPicker {
-		return m.handleModelPickerKey(msg)
-	}
-
-	// Global keys
+func (m Model) handleGlobalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		if m.cancelCtx != nil {
 			m.cancelCtx()
 		}
-		return m, tea.Quit
+		return m, tea.Quit, true
 
 	case key.Matches(msg, m.keys.Help):
 		if m.state == viewHelp {
@@ -99,93 +126,69 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.state = viewHelp
 		}
-		return m, nil
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.ModelPicker):
-		if m.state == viewModelPicker {
-			m.state = viewChat
-		} else {
-			m.state = viewModelPicker
-			m.modelPickerIndex = 0
-			m.modelPickerFilter = ""
-		}
-		return m, nil
+		m.state = viewModelPicker
+		m.modelPickerIndex = 0
+		m.modelPickerFilter = ""
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.ControlRoom):
-		if m.state == viewControlRoom {
-			m.state = viewChat
-			cancelDeviceFlow() // cancel any in-progress device flow polling
-			m.oauthPending = ""
-			m.apiKeyPending = ""
-			m.authInput = ""
-			m.authStatusMsg = ""
-		} else {
-			m.state = viewControlRoom
-			m.controlRoomIndex = 0
-			m.authStatusMsg = ""
-		}
-		return m, nil
+		m.state = viewControlRoom
+		m.controlRoomIndex = 0
+		m.authStatusMsg = ""
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.CommandPalette):
-		if m.state == viewCommandPalette {
-			m.state = viewChat
-		} else {
-			m.state = viewCommandPalette
-			m.paletteFilter = ""
-			m.paletteIndex = 0
-		}
-		return m, nil
+		m.state = viewCommandPalette
+		m.paletteFilter = ""
+		m.paletteIndex = 0
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.SessionList):
-		if m.state == viewSessionList {
-			m.state = viewChat
-		} else {
-			m.state = viewSessionList
-			m.sessionListIndex = 0
-		}
-		return m, nil
+		m.state = viewSessionList
+		m.sessionListIndex = 0
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.InfoPanel):
 		m.infoPanelCmp.Toggle()
 		m.syncInfoPanel()
-		return m, nil
+		return m, nil, true
 
 	case key.Matches(msg, m.keys.ThinkingToggle):
 		m.thinkingMode = !m.thinkingMode
+		m.modelVariant = "default"
 		if m.thinkingMode {
 			m.modelVariant = "think"
-			m.status = "Thinking mode ON"
-		} else {
-			m.modelVariant = "default"
-			m.status = "Thinking mode OFF"
 		}
-		return m, nil
+		m.status = fmt.Sprintf("Thinking mode %s", map[bool]string{true: "ON", false: "OFF"}[m.thinkingMode])
+		return m, nil, true
 
-	case key.Matches(msg, m.keys.Clear):
+	case key.Matches(msg, m.keys.Clear), key.Matches(msg, m.keys.NewSession):
 		m.messages = []Message{}
 		_ = session.Clear()
+		if key.Matches(msg, m.keys.NewSession) {
+			m.sessionInputTokens, m.sessionOutputTokens = 0, 0
+			m.sessionCacheCreationTokens, m.sessionCacheReadTokens = 0, 0
+			m.sessionCost = 0
+			m.modifiedFiles = nil
+			m.status = "New session"
+		} else {
+			m.status = "Chat cleared"
+		}
 		m.updateViewport()
-		m.status = "Chat cleared"
-		return m, nil
+		return m, nil, true
+	}
+	return m, nil, false
+}
 
-	case key.Matches(msg, m.keys.NewSession):
-		m.messages = []Message{}
-		_ = session.Clear()
-		m.sessionInputTokens = 0
-		m.sessionOutputTokens = 0
-		m.sessionCacheCreationTokens = 0
-		m.sessionCacheReadTokens = 0
-		m.sessionCost = 0
-		m.modifiedFiles = nil
-		m.updateViewport()
-		m.status = "New session"
-		return m, nil
-
-	// Control Room navigation + Input history
+func (m Model) handleChatInputKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// History and Control Room navigation
+	switch {
 	case key.Matches(msg, m.keys.Up):
 		if m.state == viewChat && m.textarea.Line() == 0 && len(m.inputHistory) > 0 {
 			if m.inputHistoryIdx == -1 {
-				// Starting to browse: save current draft
 				m.inputHistoryDraft = m.textarea.Value()
 				m.inputHistoryIdx = len(m.inputHistory) - 1
 			} else if m.inputHistoryIdx > 0 {
@@ -196,25 +199,18 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.syncTextareaHeight()
 			return m, nil
 		}
-		if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
-			if m.controlRoomIndex > 0 {
-				m.controlRoomIndex--
-			}
+		if m.state == viewControlRoom && m.controlRoomIndex > 0 {
+			m.controlRoomIndex--
 			return m, nil
 		}
 
 	case key.Matches(msg, m.keys.Down):
 		if m.state == viewChat && m.inputHistoryIdx != -1 {
-			lastLine := m.textarea.LineCount() - 1
-			if lastLine < 0 {
-				lastLine = 0
-			}
-			if m.textarea.Line() == lastLine {
+			if m.textarea.Line() == m.textarea.LineCount()-1 {
 				if m.inputHistoryIdx < len(m.inputHistory)-1 {
 					m.inputHistoryIdx++
 					m.textarea.SetValue(m.inputHistory[m.inputHistoryIdx])
 				} else {
-					// Back to draft
 					m.inputHistoryIdx = -1
 					m.textarea.SetValue(m.inputHistoryDraft)
 					m.inputHistoryDraft = ""
@@ -224,15 +220,13 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
-			if m.controlRoomIndex < len(m.controlRoomProviders)-1 {
-				m.controlRoomIndex++
-			}
+		if m.state == viewControlRoom && m.controlRoomIndex < len(m.controlRoomProviders)-1 {
+			m.controlRoomIndex++
 			return m, nil
 		}
 
 	case key.Matches(msg, m.keys.Disconnect):
-		if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
+		if m.state == viewControlRoom {
 			provider := m.controlRoomProviders[m.controlRoomIndex]
 			if auth.GetStorage().IsConnected(provider) {
 				_ = auth.GetStorage().RemoveAuth(provider)
@@ -242,54 +236,41 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// 'n' to add new provider in Control Room
-	if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
-		if msg.String() == "n" || msg.String() == "N" {
-			m.state = viewAddProvider
-			f := newAddProviderForm(dialogWidth(46, m.width, 36))
-			m.addProviderForm = &f
-			return m, m.addProviderForm.Init()
-		}
+	// Add new provider in Control Room
+	if m.state == viewControlRoom && (msg.String() == "n" || msg.String() == "N") {
+		m.state = viewAddProvider
+		f := newAddProviderForm(dialogWidth(46, m.width, 36))
+		m.addProviderForm = &f
+		return m, m.addProviderForm.Init()
 	}
 
-	// Add Provider form handling
-	if m.state == viewAddProvider {
-		return m.handleAddProviderKey(msg)
-	}
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		return m.handleCancelAction()
 
-	// Handle OAuth code or API key input
-	if m.state == viewControlRoom && (m.oauthPending != "" || m.apiKeyPending != "") {
-		return m.handleAuthInputKey(msg)
-	}
+	case key.Matches(msg, m.keys.Send):
+		return m.handleSendKey()
 
-	// Tab key in chat mode: completion or focus toggle
-	if m.state == viewChat && key.Matches(msg, m.keys.Tab) && !m.isStreaming {
-		if m.focused == "input" {
-			// Try tab completion first
-			input := m.textarea.Value()
-			if m.completion.active || strings.HasPrefix(input, "/") || strings.Contains(input, "@") {
-				return m.handleTabCompletion()
+	case key.Matches(msg, m.keys.Tab):
+		if m.state == viewChat && !m.isStreaming {
+			if m.focused == "input" {
+				input := m.textarea.Value()
+				if m.completion.active || strings.HasPrefix(input, "/") || strings.Contains(input, "@") {
+					return m.handleTabCompletion()
+				}
+				m.focused = "messages"
+				m.textarea.Blur()
+				return m, nil
 			}
-			// No completion context: switch focus to messages
-			m.focused = "messages"
-			m.textarea.Blur()
+			m.focused = "input"
+			m.textarea.Focus()
 			return m, nil
 		}
-		// In messages focus: switch back to input
-		m.focused = "input"
-		m.textarea.Focus()
-		return m, nil
 	}
 
-	// Reset completion state on any non-Tab key in chat mode
-	if m.state == viewChat && !key.Matches(msg, m.keys.Tab) {
-		m.completion.active = false
-	}
-
-	// Message viewport navigation when focused on messages
+	// Viewport navigation
 	if m.state == viewChat && m.focused == "messages" {
-		keyStr := msg.String()
-		switch keyStr {
+		switch msg.String() {
 		case "j", "down":
 			m.viewport.ScrollDown(1)
 			return m, nil
@@ -297,7 +278,6 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.viewport.ScrollUp(1)
 			return m, nil
 		case "t":
-			// Toggle thinking block expand/collapse for the last assistant message
 			if len(m.messages) > 0 {
 				lastIdx := len(m.messages) - 1
 				if m.messages[lastIdx].Thinking != "" {
@@ -313,70 +293,12 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch {
-	case key.Matches(msg, m.keys.Cancel):
-		if m.isStreaming && m.cancelCtx != nil {
-			m.cancelCtx()
-			m.isStreaming = false
-			m.streamTokenCount = 0
-			m.tableRonde = nil
-			// Clean up Table Ronde stream channels
-			for k := range tableRondeStreamChans {
-				delete(tableRondeStreamChans, k)
-			}
-			m.statusBar.Update(status.SetStreamingMsg{Active: false})
-
-			// Add cancel summary
-			if len(m.messages) > 0 {
-				lastIdx := len(m.messages) - 1
-				lastMsg := m.messages[lastIdx]
-				if lastMsg.Role == "assistant" {
-					// Count approximate tokens generated
-					tokenCount := (len(lastMsg.Content) + 3) / 4
-					toolCount := 0
-					for _, tc := range lastMsg.ToolCalls {
-						if tc.Status == 2 { // ToolStatusSuccess
-							toolCount++
-						}
-					}
-
-					summary := fmt.Sprintf("Cancelled after ~%d tokens", tokenCount)
-					if toolCount > 0 {
-						summary += fmt.Sprintf(", %d tool(s) completed", toolCount)
-					}
-					m.status = summary
-				} else {
-					m.status = "Cancelled"
-				}
-			} else {
-				m.status = "Cancelled"
-			}
-		}
-		// Close info panel if visible (before other dismiss logic)
-		if m.infoPanelCmp.IsVisible() && m.state == viewChat {
-			m.infoPanelCmp.Toggle()
-			return m, nil
-		}
-		if m.focused == "messages" {
-			m.focused = "input"
-			m.textarea.Focus()
-			return m, nil
-		}
-		if m.oauthPending != "" || m.apiKeyPending != "" {
-			cancelDeviceFlow() // cancel any in-progress device flow polling
-			m.oauthPending = ""
-			m.apiKeyPending = ""
-			m.authInput = ""
-			return m, nil
-		}
-		m.state = viewChat
-		return m, nil
-
-	case key.Matches(msg, m.keys.Send):
-		return m.handleSendKey()
+	// Reset completion state
+	if m.state == viewChat && !key.Matches(msg, m.keys.Tab) {
+		m.completion.active = false
 	}
 
-	// Default: update textarea in chat mode
+	// Fallback: update textarea
 	if m.state == viewChat && m.focused == "input" {
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
@@ -384,6 +306,43 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	return m, nil
+}
+
+func (m Model) handleCancelAction() (tea.Model, tea.Cmd) {
+	if m.isStreaming && m.cancelCtx != nil {
+		m.cancelCtx()
+		m.isStreaming = false
+		m.streamTokenCount = 0
+		m.tableRonde = nil
+		for k := range tableRondeStreamChans {
+			delete(tableRondeStreamChans, k)
+		}
+		m.statusBar.Update(status.SetStreamingMsg{Active: false})
+
+		if len(m.messages) > 0 {
+			lastMsg := m.messages[len(m.messages)-1]
+			if lastMsg.Role == "assistant" {
+				tokenCount := (len(lastMsg.Content) + 3) / 4
+				m.status = fmt.Sprintf("Cancelled after ~%d tokens", tokenCount)
+			} else {
+				m.status = "Cancelled"
+			}
+		} else {
+			m.status = "Cancelled"
+		}
+	}
+
+	if m.infoPanelCmp.IsVisible() && m.state == viewChat {
+		m.infoPanelCmp.Toggle()
+		return m, nil
+	}
+	if m.focused == "messages" {
+		m.focused = "input"
+		m.textarea.Focus()
+		return m, nil
+	}
+	m.state = viewChat
 	return m, nil
 }
 

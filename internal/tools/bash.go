@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -161,7 +162,8 @@ func (t *BashTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return ToolResult{
 				Content: fmt.Sprintf("Exit code %d%s\n%s", exitErr.ExitCode(), timing, output),
 				IsError: true,

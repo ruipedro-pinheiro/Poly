@@ -3,6 +3,7 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -143,7 +144,8 @@ func Run(ctx context.Context, command string, cwd string) (output string, exitCo
 	}
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return combined, exitErr.ExitCode(), nil
 		}
 		return combined, 1, err

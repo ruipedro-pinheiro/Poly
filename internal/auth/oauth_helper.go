@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -149,7 +150,7 @@ func ExchangeCode(cfg OAuthConfig, code, verifier string) (*OAuthTokens, error) 
 		form.Set("code_verifier", verifier)
 	}
 
-	return postTokenRequest(cfg.TokenURL, form)
+	return postTokenRequest(context.Background(), cfg.TokenURL, form)
 }
 
 // RefreshToken refreshes the access token using a refresh token
@@ -163,7 +164,7 @@ func RefreshToken(tokenURL, clientID, clientSecret, refreshToken string) (*OAuth
 		form.Set("client_secret", clientSecret)
 	}
 
-	tokens, err := postTokenRequest(tokenURL, form)
+	tokens, err := postTokenRequest(context.Background(), tokenURL, form)
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +176,8 @@ func RefreshToken(tokenURL, clientID, clientSecret, refreshToken string) (*OAuth
 	return tokens, nil
 }
 
-func postTokenRequest(tokenURL string, form url.Values) (*OAuthTokens, error) {
-	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(form.Encode()))
+func postTokenRequest(ctx context.Context, tokenURL string, form url.Values) (*OAuthTokens, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
