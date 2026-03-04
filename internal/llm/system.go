@@ -40,20 +40,19 @@ func BuildSystemPrompt(providerName string, role string) string {
 		displayName = p.Name
 	}
 
-	// Build list of all provider names from config
-	var allProviderNames []string
+	// Build list of all provider names from registry (includes custom ones)
+	allProviderNames := GetProviderNames()
 	var otherProviderNames []string
-	for id, p := range cfg.Providers {
-		name := p.Name
-		if name == "" {
-			name = id
-		}
-		allProviderNames = append(allProviderNames, id)
+	for _, id := range allProviderNames {
 		if id != providerName {
+			// Try to get display name from config or use ID
+			name := id
+			if p, ok := cfg.Providers[id]; ok && p.Name != "" {
+				name = p.Name
+			}
 			otherProviderNames = append(otherProviderNames, name)
 		}
 	}
-	sort.Strings(allProviderNames)
 	sort.Strings(otherProviderNames)
 
 	// Get tool names dynamically from registry

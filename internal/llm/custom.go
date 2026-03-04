@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -486,7 +487,8 @@ func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<
 			continue
 		}
 
-		delta := event.Choices[0].Delta
+		choice := event.Choices[0]
+		delta := choice.Delta
 
 		if delta.Content != "" {
 			result.content += delta.Content
@@ -497,16 +499,20 @@ func (p *CustomProvider) parseOpenAIStreamResult(body io.Reader, eventChan chan<
 			if tc.ID != "" {
 				toolCallsMap[tc.Index] = &customToolCall{id: tc.ID, name: tc.Function.Name}
 			}
+
 			if tc.Function.Arguments != "" && toolCallsMap[tc.Index] != nil {
 				// Accumulate raw args - we'll parse at the end
 				if toolCallsMap[tc.Index].input == nil {
 					toolCallsMap[tc.Index].input = map[string]interface{}{"_raw": ""}
 				}
-				toolCallsMap[tc.Index].input["_raw"] = toolCallsMap[tc.Index].input["_raw"].(string) + tc.Function.Arguments
+				raw := toolCallsMap[tc.Index].input["_raw"].(string)
+				toolCallsMap[tc.Index].input["_raw"] = raw + tc.Function.Arguments
 			}
 		}
 
-		if event.Choices[0].FinishReason == "tool_calls" || event.Choices[0].FinishReason == "stop" {
+		// Detect end of stream from finish_reason or common stop markers
+		reason := strings.ToLower(choice.FinishReason)
+		if reason == "tool_calls" || reason == "stop" || reason == "end_turn" {
 			break
 		}
 	}
@@ -691,7 +697,27 @@ func LoadCustomProviders() error {
 	}
 
 	for _, cfg := range configs {
-		RegisterProvider(NewCustomProvider(cfg))
+		p := NewCustomProvider(cfg)
+		RegisterProvider(p)
+
+		// Inject into global config so UI and system prompt see it
+		gcfg := config.Get()
+		if gcfg.Providers == nil {
+			gcfg.Providers = make(map[string]config.ProviderConfig)
+		}
+		gcfg.Providers[cfg.ID] = config.ProviderConfig{
+			ID:         cfg.ID,
+			Name:       cfg.Name,
+			Endpoint:   cfg.BaseURL,
+			Format:     cfg.Format,
+			Color:      cfg.Color,
+			MaxTokens:  cfg.MaxTokens,
+			AuthHeader: cfg.AuthHeader,
+			AuthType:   "api_key", // Custom providers always use API key for now
+			Models: map[string]string{
+				"default": cfg.Model,
+			},
+		}
 	}
 
 	return nil
@@ -736,7 +762,27 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 	}
 
 	// Register the provider
-	RegisterProvider(NewCustomProvider(cfg))
+	p := NewCustomProvider(cfg)
+	RegisterProvider(p)
+
+	// Inject into global config
+	gcfg := config.Get()
+	if gcfg.Providers == nil {
+		gcfg.Providers = make(map[string]config.ProviderConfig)
+	}
+	gcfg.Providers[cfg.ID] = config.ProviderConfig{
+		ID:         cfg.ID,
+		Name:       cfg.Name,
+		Endpoint:   cfg.BaseURL,
+		Format:     cfg.Format,
+		Color:      cfg.Color,
+		MaxTokens:  cfg.MaxTokens,
+		AuthHeader: cfg.AuthHeader,
+		AuthType:   "api_key",
+		Models: map[string]string{
+			"default": cfg.Model,
+		},
+	}
 
 	return nil
 }
