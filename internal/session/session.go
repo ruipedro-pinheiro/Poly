@@ -101,8 +101,8 @@ func loadLocked() (*Session, error) {
 
 	// No current session - create new
 	currentSession = newBlankSession()
-	saveSession(currentSession)
-	updateIndex()
+	_ = saveSession(currentSession)
+	_ = updateIndex()
 	return currentSession, nil
 }
 
@@ -129,7 +129,7 @@ func AddMessage(msg Message) error {
 	sessionMu.Lock()
 	defer sessionMu.Unlock()
 	if currentSession == nil {
-		loadLocked()
+		_, _ = loadLocked()
 	}
 	msg.Timestamp = time.Now()
 	currentSession.Messages = append(currentSession.Messages, msg)
@@ -155,7 +155,7 @@ func SetMessages(msgs []Message) error {
 	sessionMu.Lock()
 	defer sessionMu.Unlock()
 	if currentSession == nil {
-		loadLocked()
+		_, _ = loadLocked()
 	}
 	currentSession.Messages = msgs
 	return saveLocked()
@@ -165,7 +165,7 @@ func SetMessages(msgs []Message) error {
 func Clear() error {
 	// Save current session before clearing
 	if currentSession != nil && len(currentSession.Messages) > 0 {
-		Save()
+		_ = Save()
 	}
 	currentSession = newBlankSession()
 	if err := saveSession(currentSession); err != nil {
@@ -177,7 +177,7 @@ func Clear() error {
 // ListSessions returns all sessions sorted by most recently updated
 func ListSessions() []SessionEntry {
 	if sessionIndex == nil {
-		loadIndex()
+		_ = loadIndex()
 	}
 	entries := make([]SessionEntry, len(sessionIndex.Sessions))
 	copy(entries, sessionIndex.Sessions)
@@ -191,7 +191,7 @@ func ListSessions() []SessionEntry {
 func SwitchSession(id string) error {
 	// Save current
 	if currentSession != nil {
-		Save()
+		_ = Save()
 	}
 
 	sess, err := loadSession(id)
@@ -207,7 +207,7 @@ func SwitchSession(id string) error {
 // ForkSession copies the current session with a new ID
 func ForkSession() (*Session, error) {
 	if currentSession == nil {
-		Load()
+		_, _ = Load()
 	}
 
 	forked := &Session{
@@ -226,7 +226,7 @@ func ForkSession() (*Session, error) {
 	}
 
 	currentSession = forked
-	updateIndex()
+	_ = updateIndex()
 	return forked, nil
 }
 
@@ -406,7 +406,7 @@ func migrateOldFormat() error {
 	}
 
 	// Save as new format
-	saveSession(&oldSession)
+	_ = saveSession(&oldSession)
 	sessionIndex.Current = oldSession.ID
 	sessionIndex.Sessions = append(sessionIndex.Sessions, sessionToEntry(&oldSession))
 

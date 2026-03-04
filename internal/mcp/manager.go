@@ -66,7 +66,9 @@ func Init() {
 // ConnectAll connects to all configured MCP servers
 func (m *Manager) ConnectAll(configs []ServerConfig) {
 	for _, cfg := range configs {
-		m.Connect(cfg)
+		if err := m.Connect(cfg); err != nil {
+			log.Printf("[MCP] Failed to connect %s: %v", cfg.Name, err)
+		}
 	}
 }
 

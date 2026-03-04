@@ -57,7 +57,7 @@ func GetStorage() *Storage {
 		storage = &Storage{
 			Providers: make(map[string]*ProviderAuth),
 		}
-		storage.load()
+		_ = storage.load() // best-effort on init, will re-load on demand
 	})
 	return storage
 }
@@ -189,7 +189,7 @@ func (s *Storage) GetAccessToken(provider string) (string, error) {
 				return "", err
 			}
 
-			s.SetOAuthTokens(provider, newTokens)
+			_ = s.SetOAuthTokens(provider, newTokens) // token refresh save is best-effort
 			return newTokens.AccessToken, nil
 		}
 

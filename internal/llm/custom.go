@@ -726,7 +726,9 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 	var configs []CustomProviderConfig
 	data, err := os.ReadFile(customProvidersFile)
 	if err == nil {
-		json.Unmarshal(data, &configs)
+		if err := json.Unmarshal(data, &configs); err != nil {
+			configs = nil
+		}
 	}
 
 	// Update or add
@@ -797,6 +799,8 @@ func GetCustomProviders() []CustomProviderConfig {
 	if err != nil {
 		return nil
 	}
-	json.Unmarshal(data, &configs)
+	if err := json.Unmarshal(data, &configs); err != nil {
+		return nil
+	}
 	return configs
 }

@@ -219,7 +219,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 	case "enter":
 		if m.sessionListIndex < len(sessions) {
 			s := sessions[m.sessionListIndex]
-			session.SwitchSession(s.ID)
+			_ = session.SwitchSession(s.ID)
 			// Reload messages from the switched session
 			m.reloadSession()
 			m.state = viewChat
@@ -229,7 +229,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 		return m, true
 
 	case "n", "N":
-		session.Clear()
+		_ = session.Clear()
 		tools.ClearModifiedFiles()
 		m.reloadSession()
 		m.state = viewChat
@@ -241,7 +241,7 @@ func (m Model) handleSessionListKey(keyStr string) (Model, bool) {
 		if m.sessionListIndex < len(sessions) {
 			s := sessions[m.sessionListIndex]
 			if s.ID != session.CurrentID() {
-				session.DeleteSession(s.ID)
+				_ = session.DeleteSession(s.ID)
 				filtered := m.filteredSessions()
 				if m.sessionListIndex >= len(filtered) {
 					m.sessionListIndex = len(filtered) - 1

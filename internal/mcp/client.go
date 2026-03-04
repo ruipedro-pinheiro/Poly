@@ -75,13 +75,13 @@ func (c *Client) Connect() error {
 		},
 	})
 	if err != nil {
-		c.cmd.Process.Kill()
+		_ = c.cmd.Process.Kill()
 		return fmt.Errorf("initialize: %w", err)
 	}
 
 	var initResult initializeResult
 	if err := json.Unmarshal(result, &initResult); err != nil {
-		c.cmd.Process.Kill()
+		_ = c.cmd.Process.Kill()
 		return fmt.Errorf("parse init result: %w", err)
 	}
 
@@ -114,8 +114,8 @@ func (c *Client) closeLocked() {
 		c.stdin.Close()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
-		c.cmd.Process.Kill()
-		c.cmd.Wait()
+		_ = c.cmd.Process.Kill()
+		_ = c.cmd.Wait()
 	}
 	c.stdin = nil
 	c.stdout = nil

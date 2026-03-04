@@ -575,7 +575,7 @@ func startAnthropicCodeExchange(provider, code string) tea.Cmd {
 		if err != nil {
 			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
 		}
-		auth.GetStorage().SetOAuthTokens(provider, tokens)
+		_ = auth.GetStorage().SetOAuthTokens(provider, tokens)
 		return OAuthResultMsg{Provider: provider, Success: true}
 	}
 }
@@ -599,7 +599,7 @@ func startOAuthForProvider(provider string) tea.Cmd {
 		if err != nil {
 			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
 		}
-		auth.GetStorage().SetOAuthTokens(provider, tokens)
+		_ = auth.GetStorage().SetOAuthTokens(provider, tokens)
 		return OAuthResultMsg{Provider: provider, Success: true}
 	}
 }
@@ -660,7 +660,7 @@ func pollDeviceFlow(provider, deviceCode string, interval int) tea.Cmd {
 		if err != nil {
 			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
 		}
-		auth.GetStorage().SetOAuthTokens(provider, tokens)
+		_ = auth.GetStorage().SetOAuthTokens(provider, tokens)
 		return OAuthResultMsg{Provider: provider, Success: true}
 	}
 }

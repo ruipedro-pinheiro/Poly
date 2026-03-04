@@ -159,7 +159,9 @@ func (m Model) renderApprovalContent(width int) string {
 		if editsRaw, ok := m.pendingApproval.Args["edits"]; ok {
 			data, _ := json.Marshal(editsRaw)
 			var edits []map[string]interface{}
-			json.Unmarshal(data, &edits)
+			if err := json.Unmarshal(data, &edits); err != nil {
+				return ""
+			}
 			info := fmt.Sprintf("%d file(s)", len(edits))
 			for _, e := range edits {
 				if p, ok := e["path"].(string); ok {
@@ -189,9 +191,9 @@ func (m Model) renderApprovalButtons(width int) string {
 	}
 
 	buttons := []buttonDef{
-		{"Allow", 0},            // underline 'A'
+		{"Allow", 0},              // underline 'A'
 		{"Allow for Session", 10}, // underline 'S' in "Session"
-		{"Deny", 0},             // underline 'D'
+		{"Deny", 0},               // underline 'D'
 	}
 
 	var rendered []string

@@ -50,7 +50,7 @@ func StartGoogleOAuth() (string, error) {
 	}
 
 	authURL := GoogleAuthorizeURL + "?" + params.Encode()
-	openBrowser(authURL)
+	_ = openBrowser(authURL)
 
 	return authURL, nil
 }
@@ -96,19 +96,19 @@ func StartGoogleOAuthWithCallback() (*OAuthTokens, error) {
 
 			if returnedState != state {
 				errChan <- fmt.Errorf("state mismatch")
-				w.Write([]byte("Error: state mismatch"))
+				_, _ = w.Write([]byte("Error: state mismatch"))
 				return
 			}
 
 			if code == "" {
 				errorMsg := r.URL.Query().Get("error")
 				errChan <- fmt.Errorf("no code in callback: %s", errorMsg)
-				w.Write([]byte("Error: " + errorMsg))
+				_, _ = w.Write([]byte("Error: " + errorMsg))
 				return
 			}
 
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			_, _ = w.Write([]byte(`
 				<html><body style="font-family: system-ui; padding: 40px; text-align: center;">
 					<h1>Success!</h1>
 					<p>You can close this window and return to Poly.</p>
@@ -118,11 +118,11 @@ func StartGoogleOAuthWithCallback() (*OAuthTokens, error) {
 		}),
 	}
 
-	go server.Serve(listener)
+	go func() { _ = server.Serve(listener) }()
 	defer server.Close()
 
 	// Open browser
-	openBrowser(authURL)
+	_ = openBrowser(authURL)
 
 	// Wait for callback (with timeout)
 	select {

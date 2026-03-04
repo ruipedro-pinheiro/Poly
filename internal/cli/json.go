@@ -12,17 +12,17 @@ import (
 
 // jsonEvent is the NDJSON output format for streaming events.
 type jsonEvent struct {
-	Type        string                 `json:"type"`
-	Content     string                 `json:"content,omitempty"`
-	Thinking    string                 `json:"thinking,omitempty"`
-	Name        string                 `json:"name,omitempty"`
-	Input       map[string]interface{} `json:"input,omitempty"`
-	Output      string                 `json:"output,omitempty"`
-	IsError     bool                   `json:"is_error,omitempty"`
-	Model       string                 `json:"model,omitempty"`
-	InputTokens int                    `json:"input_tokens,omitempty"`
-	OutputTokens int                   `json:"output_tokens,omitempty"`
-	Message     string                 `json:"message,omitempty"`
+	Type         string                 `json:"type"`
+	Content      string                 `json:"content,omitempty"`
+	Thinking     string                 `json:"thinking,omitempty"`
+	Name         string                 `json:"name,omitempty"`
+	Input        map[string]interface{} `json:"input,omitempty"`
+	Output       string                 `json:"output,omitempty"`
+	IsError      bool                   `json:"is_error,omitempty"`
+	Model        string                 `json:"model,omitempty"`
+	InputTokens  int                    `json:"input_tokens,omitempty"`
+	OutputTokens int                    `json:"output_tokens,omitempty"`
+	Message      string                 `json:"message,omitempty"`
 }
 
 // RunJSON handles --json mode: sends prompt to default provider,
@@ -65,16 +65,16 @@ func RunJSON(prompt string) int {
 	for event := range ch {
 		switch event.Type {
 		case "content":
-			enc.Encode(jsonEvent{Type: "content", Content: event.Content})
+			_ = enc.Encode(jsonEvent{Type: "content", Content: event.Content})
 		case "thinking":
-			enc.Encode(jsonEvent{Type: "thinking", Thinking: event.Thinking})
+			_ = enc.Encode(jsonEvent{Type: "thinking", Thinking: event.Thinking})
 		case "tool_use":
 			evt := jsonEvent{Type: "tool_use"}
 			if event.ToolCall != nil {
 				evt.Name = event.ToolCall.Name
 				evt.Input = event.ToolCall.Arguments
 			}
-			enc.Encode(evt)
+			_ = enc.Encode(evt)
 		case "tool_result":
 			evt := jsonEvent{Type: "tool_result"}
 			if event.ToolResult != nil {
@@ -84,7 +84,7 @@ func RunJSON(prompt string) int {
 			if event.ToolCall != nil {
 				evt.Name = event.ToolCall.Name
 			}
-			enc.Encode(evt)
+			_ = enc.Encode(evt)
 		case "done":
 			evt := jsonEvent{Type: "done"}
 			if event.Response != nil {
@@ -92,14 +92,14 @@ func RunJSON(prompt string) int {
 				evt.InputTokens = event.Response.InputTokens
 				evt.OutputTokens = event.Response.OutputTokens
 			}
-			enc.Encode(evt)
+			_ = enc.Encode(evt)
 			return 0
 		case "error":
 			msg := "unknown error"
 			if event.Error != nil {
 				msg = event.Error.Error()
 			}
-			enc.Encode(jsonEvent{Type: "error", Message: msg})
+			_ = enc.Encode(jsonEvent{Type: "error", Message: msg})
 			return 1
 		}
 	}
@@ -109,5 +109,5 @@ func RunJSON(prompt string) int {
 
 func writeJSONError(format string, args ...interface{}) {
 	enc := json.NewEncoder(os.Stdout)
-	enc.Encode(jsonEvent{Type: "error", Message: fmt.Sprintf(format, args...)})
+	_ = enc.Encode(jsonEvent{Type: "error", Message: fmt.Sprintf(format, args...)})
 }

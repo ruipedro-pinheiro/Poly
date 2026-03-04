@@ -82,7 +82,7 @@ func StartAnthropicOAuth(mode string) (string, error) {
 	authURL := baseURL + "?" + params.Encode()
 
 	// Try to open browser
-	openBrowser(authURL)
+	_ = openBrowser(authURL)
 
 	return authURL, nil
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -41,7 +42,9 @@ func main() {
 	}
 
 	// Load config from ~/.poly/config.json (merges with defaults)
-	config.Load()
+	if _, err := config.Load(); err != nil {
+		log.Printf("warning: failed to load config: %v", err)
+	}
 
 	// Apply saved color theme
 	if savedTheme := config.GetColorTheme(); savedTheme != "" {
@@ -66,7 +69,9 @@ func main() {
 	llm.RegisterAllProviders()
 
 	// Load custom providers from ~/.poly/providers.json
-	llm.LoadCustomProviders()
+	if err := llm.LoadCustomProviders(); err != nil {
+		log.Printf("warning: failed to load custom providers: %v", err)
+	}
 
 	// Initialize sub-provider for delegate_task tool (lazy - resolves at call time)
 	llm.InitSubProvider()

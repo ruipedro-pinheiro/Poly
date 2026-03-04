@@ -35,7 +35,7 @@ func initCommands() *CommandRegistry {
 		Usage:       "/clear",
 		Handler: func(m *Model, args []string) {
 			m.messages = []Message{}
-			session.Clear()
+			_ = session.Clear()
 			m.updateViewport()
 			m.status = "Chat cleared"
 		},
@@ -819,7 +819,7 @@ func (m *Model) handleUndo() {
 			OutputTokens: msg.OutputTokens,
 		}
 	}
-	session.SetMessages(sessionMsgs)
+	_ = session.SetMessages(sessionMsgs)
 
 	m.updateViewport()
 	m.status = "Last exchange removed"
@@ -867,7 +867,7 @@ func (m *Model) handleRewind(args []string) {
 			OutputTokens: msg.OutputTokens,
 		}
 	}
-	session.SetMessages(sessionMsgs)
+	_ = session.SetMessages(sessionMsgs)
 
 	m.updateViewport()
 	m.status = fmt.Sprintf("Rewound %d messages (%d remaining)", n, remaining)
@@ -912,7 +912,7 @@ func (m *Model) handleRetry() {
 			OutputTokens: msg.OutputTokens,
 		}
 	}
-	session.SetMessages(sessionMsgs)
+	_ = session.SetMessages(sessionMsgs)
 
 	m.retryContent = retryContent
 	m.status = "Retrying last message..."

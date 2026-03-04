@@ -163,14 +163,14 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Clear):
 		m.messages = []Message{}
-		session.Clear()
+		_ = session.Clear()
 		m.updateViewport()
 		m.status = "Chat cleared"
 		return m, nil
 
 	case key.Matches(msg, m.keys.NewSession):
 		m.messages = []Message{}
-		session.Clear()
+		_ = session.Clear()
 		m.sessionInputTokens = 0
 		m.sessionOutputTokens = 0
 		m.sessionCacheCreationTokens = 0
@@ -235,7 +235,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.state == viewControlRoom && m.oauthPending == "" && m.apiKeyPending == "" {
 			provider := m.controlRoomProviders[m.controlRoomIndex]
 			if auth.GetStorage().IsConnected(provider) {
-				auth.GetStorage().RemoveAuth(provider)
+				_ = auth.GetStorage().RemoveAuth(provider)
 				m.status = provider + " disconnected"
 			}
 			return m, nil
@@ -524,7 +524,7 @@ func (m Model) handleControlRoomEnter() (tea.Model, tea.Cmd) {
 			apiKey = getClipboardContent()
 		}
 		if apiKey != "" {
-			auth.GetStorage().SetAPIKey(m.apiKeyPending, apiKey)
+			_ = auth.GetStorage().SetAPIKey(m.apiKeyPending, apiKey)
 			m.status = m.apiKeyPending + " connected!"
 			m.apiKeyPending = ""
 			m.authInput = ""

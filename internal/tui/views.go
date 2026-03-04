@@ -552,7 +552,7 @@ func renderToolCallBlock(calls []ToolCallData, width int) string {
 func (m *Model) addMessage(msg Message) {
 	m.messages = append(m.messages, msg)
 	// Persist to session
-	session.AddMessage(session.Message{
+	_ = session.AddMessage(session.Message{
 		Role:         msg.Role,
 		Content:      msg.Content,
 		Provider:     msg.Provider,
@@ -585,7 +585,7 @@ func (m *Model) saveMessageAt(idx int) {
 		return
 	}
 	msg := m.messages[idx]
-	session.AddMessage(session.Message{
+	_ = session.AddMessage(session.Message{
 		Role:         msg.Role,
 		Content:      msg.Content,
 		Provider:     msg.Provider,

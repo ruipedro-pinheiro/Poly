@@ -351,7 +351,7 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 			OutputTokens: msg.OutputTokens,
 		}
 	}
-	session.SetMessages(sessionMsgs)
+	_ = session.SetMessages(sessionMsgs)
 
 	m.updateViewport()
 	m.status = fmt.Sprintf("Context compacted (%d -> %d messages)", oldCount, len(m.messages))

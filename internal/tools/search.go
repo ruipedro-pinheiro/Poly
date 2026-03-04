@@ -69,7 +69,7 @@ func (t *GlobTool) Execute(args map[string]interface{}) ToolResult {
 			suffix = strings.TrimPrefix(parts[1], "/")
 		}
 
-		WalkDir(absPath, 10, func(path string, d os.DirEntry) error {
+		_ = WalkDir(absPath, 10, func(path string, d os.DirEntry) error {
 			if d.IsDir() {
 				return nil
 			}
@@ -256,14 +256,14 @@ func (t *GrepTool) Execute(args map[string]interface{}) ToolResult {
 	}
 
 	if info.IsDir() {
-		WalkDir(absPath, 10, func(path string, d os.DirEntry) error {
+		_ = WalkDir(absPath, 10, func(path string, d os.DirEntry) error {
 			if d.IsDir() {
 				return nil
 			}
 			return searchFile(path)
 		})
 	} else {
-		searchFile(absPath)
+		_ = searchFile(absPath)
 	}
 
 	if len(results) == 0 {

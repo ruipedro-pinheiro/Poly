@@ -70,7 +70,7 @@ func StartCopilotDeviceFlow() (*DeviceFlowResponse, error) {
 	}
 
 	// Try to open the verification URL in the browser
-	openBrowser(result.VerificationURI)
+	_ = openBrowser(result.VerificationURI)
 
 	return &result, nil
 }

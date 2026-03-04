@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	maxFileSize     = 256 * 1024 // 256KB
+	maxFileSize      = 256 * 1024 // 256KB
 	defaultLineLimit = 2000
 	maxLineLength    = 2000
 )
@@ -227,7 +227,7 @@ func (t *ListFilesTool) Execute(args map[string]interface{}) ToolResult {
 			if entry.IsDir() {
 				results = append(results, fmt.Sprintf("[DIR]  %s/", relPath))
 				if recursive {
-					listDir(fullPath, depth+1)
+					_ = listDir(fullPath, depth+1)
 				}
 			} else {
 				info, err := entry.Info()
@@ -275,7 +275,6 @@ func formatSize(size int64) string {
 	}
 	return fmt.Sprintf("%.1fMB", float64(size)/(1024*1024))
 }
-
 
 // WalkDir helper that respects .gitignore patterns (simplified)
 func WalkDir(root string, maxDepth int, fn func(path string, d fs.DirEntry) error) error {

@@ -195,7 +195,7 @@ func SetColorTheme(name string) {
 	}
 	current.Settings.ColorTheme = name
 	configMu.Unlock()
-	Save()
+	_ = Save()
 }
 
 // NotificationsEnabled returns whether desktop notifications are enabled (default: true)
@@ -215,7 +215,7 @@ func SetNotifications(enabled bool) {
 	}
 	current.Settings.Notifications = &enabled
 	configMu.Unlock()
-	Save()
+	_ = Save()
 }
 
 // SandboxEnabled returns whether sandbox mode is enabled
@@ -232,7 +232,7 @@ func SetSandbox(enabled bool) {
 	}
 	current.Settings.Sandbox = enabled
 	configMu.Unlock()
-	Save()
+	_ = Save()
 }
 
 // GetSandboxImage returns the configured sandbox image (default: alpine:latest)
@@ -252,7 +252,7 @@ func SetMaxTableRounds(n int) {
 	}
 	current.Settings.MaxTableRounds = n
 	configMu.Unlock()
-	Save()
+	_ = Save()
 }
 
 // GetMCPServers returns the configured MCP servers

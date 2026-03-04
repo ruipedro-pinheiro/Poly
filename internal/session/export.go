@@ -12,7 +12,7 @@ import (
 // GetCurrentSession returns the current session (loads if needed)
 func GetCurrentSession() *Session {
 	if currentSession == nil {
-		Load()
+		_, _ = Load()
 	}
 	return currentSession
 }
