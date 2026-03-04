@@ -185,9 +185,30 @@
 - [x] 10 nouveaux fichiers de tests (security 100%, config 47%, session 41%, hooks 37%, llm 23%, tools 22%)
 - [ ] 60%+ coverage globale *(en cours — TUI à 0.5% tire la moyenne vers le bas)*
 - [ ] Coverage TUI : tests pour les interactions clavier principales
+- [ ] Coverage providers streaming : 0% actuellement, critique
+- [ ] Coverage auth/OAuth : 0% actuellement
 - [ ] Stress test 20+ providers
 - [ ] Temps premier message < 500ms
 - [ ] Image support dans le chat (drag & drop ou path)
+
+### Rendering (P2)
+
+- [ ] Side-by-side diff view (actuellement line-by-line seulement)
+- [ ] Vérifier rendu Glamour + Chroma en runtime (code présent dans markdown.go, à confirmer visuellement)
+
+### Custom Providers Fix (P0) — BLOQUANT POUR CREDIBILITE
+
+- [ ] **Agentic loop** pour custom providers (actuellement single-turn, tools jamais exécutés)
+- [ ] **Image support** pour custom providers (map[string]string → interface{})
+- [ ] **Token tracking** pour custom providers (InputTokens/OutputTokens toujours à 0)
+- [ ] **Cost calculation** pour custom providers (dépend du token tracking)
+
+### Wiring manquant (P1)
+
+- [ ] **Retry/backoff** : retry.go existe mais aucun provider ne l'appelle — brancher
+- [ ] **Send()** : tous les providers retournent "not implemented" — implémenter ou supprimer de l'interface
+- [ ] **strings.Title()** déprécié : remplacer dans modelpicker.go et update_keys.go
+- [ ] **DefaultContextWindow** : adapter au provider (200K fixe → Gemini=1M, local=32K, etc.)
 
 ---
 

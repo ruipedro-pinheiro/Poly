@@ -40,7 +40,7 @@
   [You @gpt]       Propose une alternative plus performante
   [gpt]            Voici une version utilisant un heap sort...
   ```
-- Le mode `@all` (cascade) envoie le même prompt à tous les providers séquentiellement. **L'orchestrateur actuel est basique et à revoir** : il manque un vrai système pour que les IAs interagissent entre elles (review croisée, consensus, débat).
+- Le mode `@all` déclenche la **Table Ronde** (v0.4.0) : les IAs discutent entre elles via @mentions, avec des rounds configurables (`/rounds [N]`). L'ancien système cascade a été supprimé.
 - Poly n'est **PAS** du multi-AI parallèle côte-à-côte (pas de split-screen), ni un dashboard, ni un IDE. C'est un **unique fil de conversation** où plusieurs IAs peuvent contribuer.
 
 ### 2.3 Objectifs du redesign
@@ -286,7 +286,7 @@ Ce que **tous** les outils font et que Poly doit impérativement avoir :
 | F4A.1 | Chat multi-voix : chaque message peut cibler un provider différent | ✅ Fonctionne (@claude, @gemini, @gpt dans le même chat) | ✅ Maintenir et renforcer visuellement |
 | F4A.2 | Historique partagé : chaque provider voit les messages de tous les autres | ✅ | ✅ Maintenir |
 | F4A.3 | Identité visuelle par provider dans le fil | ✅ Bordure gauche colorée | ✅ Maintenir + couleurs auto-assignées |
-| F4A.4 | `@all` cascade améliorée | Séquentiel basique (le 1er répond, les autres reviewent) | À repenser : meilleur orchestrateur (consensus, débat, vote, review croisée) |
+| F4A.4 | `@all` Table Ronde | ✅ Implémenté (v0.4.0) : inter-IA @mentions, rounds configurables, Esc coupe tout | Améliorer : consensus, vote, scoring — long terme |
 | F4A.5 | Le dernier provider utilisé devient le défaut pour le prochain message | ✅ | ✅ Maintenir |
 | F4A.6 | Meta-routes intelligentes | ❌ | `@fast` (le plus rapide), `@cheap` (le moins cher), `@local` (tous les locaux) — long terme |
 | F4A.7 | Orchestrateur configurable | ❌ Cascade fixe | Modes d'orchestration : séquentiel, review croisée, consensus — long terme |
@@ -516,57 +516,65 @@ Assignation : par ordre d'ajout dans la config. Override possible via `provider_
 
 ## 10. Roadmap de Migration
 
-### Phase 1 : Nettoyage (P0, ~2h)
+### Phase 1 : Nettoyage (P0) ✅
 
-- [ ] Supprimer les ~1400 lignes de code mort (`components/dialogs/`, messages dead code)
-- [ ] Unifier `formatTokens()`, `session.Clear()` → `SetMessages()`
-- [ ] Remplacer `strings.Title()` déprécié
-- [ ] Centraliser les constantes de dialog (largeurs, styles communs)
-- [ ] Vérifier que le build passe
+- [x] Supprimer les ~1400 lignes de code mort (`components/dialogs/`, messages dead code)
+- [x] Unifier `formatTokens()`, `session.Clear()` → `SetMessages()`
+- [ ] Remplacer `strings.Title()` déprécié *(toujours utilisé dans modelpicker.go et update_keys.go)*
+- [x] Centraliser les constantes de dialog (largeurs, styles communs)
+- [x] Vérifier que le build passe
 
-### Phase 2 : Layout (P0, ~4h)
+### Phase 2 : Layout (P0) ✅
 
-- [ ] Réduire le header à 1 ligne (afficher provider actif + variant + contexte% + cwd)
-- [ ] Supprimer la sidebar permanente du layout
-- [ ] Compacter la status bar à 1 ligne
-- [ ] Recalculer le layout : messages = 100% largeur
-- [ ] Rendre les hints contextuels (pas permanents)
-- [ ] Ajouter focus clavier sur le viewport (Tab/Shift+Tab)
+- [x] Réduire le header à 1 ligne (afficher provider actif + variant + contexte% + cwd)
+- [x] Supprimer la sidebar permanente du layout
+- [x] Compacter la status bar à 1 ligne
+- [x] Recalculer le layout : messages = 100% largeur
+- [x] Rendre les hints contextuels (pas permanents)
+- [x] Ajouter focus clavier sur le viewport (Tab/Shift+Tab)
 
-### Phase 3 : Provider Dynamique (P0, ~3h)
+### Phase 3 : Provider Dynamique (P0) ✅
 
-- [ ] Supprimer `providerOrder` hardcodé → dynamique depuis config
-- [ ] Supprimer `variantOrder` hardcodé → dynamique depuis config
-- [ ] Auto-assigner les couleurs depuis la palette Catppuccin cyclique
-- [ ] `DefaultContextWindow` → lu depuis la config provider
-- [ ] Custom providers visibles dans splash, help, Control Room, partout
-- [ ] Splash dynamique (lister TOUS les providers configurés)
+- [x] Supprimer `providerOrder` hardcodé → dynamique depuis config
+- [ ] Supprimer `variantOrder` hardcodé → dynamique depuis config *(toujours hardcodé dans modelpicker)*
+- [x] Auto-assigner les couleurs depuis la palette Catppuccin cyclique
+- [ ] `DefaultContextWindow` → lu depuis la config provider *(toujours fixe à 200K)*
+- [x] Custom providers visibles dans splash, help, Control Room, partout
+- [x] Splash dynamique (lister TOUS les providers configurés)
 
-### Phase 4 : Info Panel Overlay (P1, ~3h)
+### Phase 4 : Info Panel Overlay (P1) ✅
 
-- [ ] Créer le composant Info Panel (overlay droit)
-- [ ] Y migrer les infos de la sidebar : tokens, providers, fichiers, MCP
-- [ ] Toggle via `Ctrl+I`
-- [ ] Scrollable si le contenu dépasse
-- [ ] Supprimer l'ancien composant sidebar
+- [x] Créer le composant Info Panel (overlay droit)
+- [x] Y migrer les infos de la sidebar : tokens, providers, fichiers, MCP
+- [x] Toggle via `Ctrl+I`
+- [x] Scrollable si le contenu dépasse
+- [x] Supprimer l'ancien composant sidebar
 
-### Phase 5 : Dialogs Modernisés (P1, ~4h)
+### Phase 5 : Dialogs Modernisés (P1) — Partiellement fait
 
-- [ ] Rendre tous les dialogs scrollables
-- [ ] Synchroniser la command palette avec le CommandRegistry complet
-- [ ] Remplacer l'input Add Provider par Huh forms
-- [ ] Rendre le Control Room dynamique (tous les providers)
-- [ ] Help : providers dynamiques, keybindings complètes
-- [ ] Session list : ajouter fuzzy search
-- [ ] Évaluer remplacement de Ctrl+S
+- [x] Rendre tous les dialogs scrollables
+- [x] Synchroniser la command palette avec le CommandRegistry complet
+- [x] Remplacer l'input Add Provider par custom forms (Catppuccin, validation)
+- [x] Rendre le Control Room dynamique (tous les providers)
+- [x] Help : providers dynamiques, keybindings complètes
+- [ ] Session list : ajouter fuzzy search *(pas de recherche)*
+- [ ] Évaluer remplacement de Ctrl+S *(toujours Ctrl+S)*
 
-### Phase 6 : Polish (P2, ~2h)
+### Phase 6 : Polish (P2) — Partiellement fait
 
-- [ ] Thinking blocks collapsés par défaut (▶ pour ouvrir)
-- [ ] Tool calls plus compacts (one-liner quand terminés)
-- [ ] Version dans splash synchronisée avec git tag
-- [ ] Estimation coût avant cascade
-- [ ] Tester avec 10+ providers simulés
+- [x] Thinking blocks collapsés par défaut (▶ pour ouvrir)
+- [x] Tool calls plus compacts (one-liner quand terminés)
+- [ ] Version dans splash synchronisée avec git tag *(toujours hardcodé)*
+- [x] Estimation coût avant cascade (message système avant @all)
+- [ ] Tester avec 10+ providers simulés *(pas fait)*
+
+### NON COUVERT par ce cahier des charges — ajouté post-audit
+
+- [ ] **Custom providers agentic loop** (single-turn, tools jamais exécutés)
+- [ ] **Retry/backoff** (code existe, pas branché)
+- [ ] **Code dupliqué** : gradientText() x3, timeAgo() x2, dialog rendering x2
+
+*Note : Markdown rendering (Glamour) et syntax highlighting (Chroma) sont implémentés dans markdown.go + views.go. À vérifier visuellement en runtime.*
 
 ---
 
