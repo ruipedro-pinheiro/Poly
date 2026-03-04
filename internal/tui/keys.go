@@ -4,14 +4,14 @@ import "charm.land/bubbles/v2/key"
 
 // KeyMap defines all keyboard shortcuts
 type KeyMap struct {
-	Quit        key.Binding
-	Help        key.Binding
-	Send        key.Binding
-	Cancel      key.Binding
-	NewSession  key.Binding
-	Clear       key.Binding
-	ModelPicker key.Binding
-	ControlRoom key.Binding
+	Quit           key.Binding
+	Help           key.Binding
+	Send           key.Binding
+	Cancel         key.Binding
+	NewSession     key.Binding
+	Clear          key.Binding
+	ModelPicker    key.Binding
+	ControlRoom    key.Binding
 	CommandPalette key.Binding
 
 	// Navigation

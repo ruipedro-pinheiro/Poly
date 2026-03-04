@@ -22,4 +22,3 @@ var Borders = BorderStyles{
 	Input:    lipgloss.RoundedBorder(),
 	ToolCall: lipgloss.RoundedBorder(),
 }
-

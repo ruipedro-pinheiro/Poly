@@ -71,6 +71,9 @@ func (p *OllamaProvider) Stream(ctx context.Context, messages []Message, toolDef
 		if url == "" {
 			url = "http://localhost:11434/api"
 		}
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			url = "http://" + url
+		}
 		if !strings.HasSuffix(url, "/api") {
 			url = strings.TrimSuffix(url, "/") + "/api"
 		}

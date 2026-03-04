@@ -80,8 +80,14 @@ var (
 )
 
 func init() {
-	home, _ := os.UserHomeDir()
-	configDir = filepath.Join(home, ".poly")
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		// Fallback to current directory if home is not available (common on some Windows setups)
+		cwd, _ := os.Getwd()
+		configDir = filepath.Join(cwd, ".poly")
+	} else {
+		configDir = filepath.Join(home, ".poly")
+	}
 }
 
 // GetConfigDir returns the config directory

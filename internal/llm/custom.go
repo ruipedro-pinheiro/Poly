@@ -396,7 +396,15 @@ func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinki
 		return nil, err
 	}
 
-	url := strings.TrimSuffix(p.config.BaseURL, "/")
+	baseURL := strings.TrimSuffix(p.config.BaseURL, "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("provider %q has no base_url configured", p.config.ID)
+	}
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		return nil, fmt.Errorf("provider %q base_url must start with http:// or https://", p.config.ID)
+	}
+
+	url := baseURL
 	switch p.config.Format {
 	case "anthropic":
 		url += "/messages"

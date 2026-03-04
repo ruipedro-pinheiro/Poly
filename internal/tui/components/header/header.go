@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/layout"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // Header is the interface for the header bar component
@@ -54,10 +54,10 @@ func (h *headerCmp) View() string {
 		return ""
 	}
 
-	sep := lipgloss.NewStyle().Foreground(styles.Surface2).Render(" │ ")
+	sep := lipgloss.NewStyle().Foreground(theme.Surface2).Render(" │ ")
 
 	// Logo
-	logo := core.GradientText(core.IconModel+" POLY", styles.Mauve, styles.Lavender, true)
+	logo := core.GradientText(core.IconModel+" POLY", theme.Mauve, theme.Lavender, true)
 
 	// Provider name with truncation (max 12 chars → 10 + "..")
 	provDisplay := h.provider
@@ -73,11 +73,11 @@ func (h *headerCmp) View() string {
 	var pctColor color.Color
 	switch {
 	case pctVal >= 80:
-		pctColor = styles.Red
+		pctColor = theme.Red
 	case pctVal >= 50:
-		pctColor = styles.Yellow
+		pctColor = theme.Yellow
 	default:
-		pctColor = styles.Green
+		pctColor = theme.Green
 	}
 	pctRendered := lipgloss.NewStyle().Foreground(pctColor).Render(pctStr)
 
@@ -97,7 +97,7 @@ func (h *headerCmp) View() string {
 		cwdRendered := ""
 		cwdWidth := 0
 		if h.cwd != "" {
-			cwdRendered = lipgloss.NewStyle().Foreground(styles.Overlay0).Render(h.cwd)
+			cwdRendered = lipgloss.NewStyle().Foreground(theme.Overlay0).Render(h.cwd)
 			cwdWidth = lipgloss.Width(h.cwd)
 		}
 

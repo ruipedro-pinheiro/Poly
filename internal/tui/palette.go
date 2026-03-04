@@ -52,7 +52,7 @@ func (m Model) renderCommandPalette() string {
 	// Scroll indicator top
 	if startIdx > 0 {
 		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
-			Render("   ... " + strings.Repeat("^", 3)) + "\n")
+			Render("   ... "+strings.Repeat("^", 3)) + "\n")
 	}
 
 	// Render commands
@@ -99,7 +99,7 @@ func (m Model) renderCommandPalette() string {
 	// Scroll indicator bottom
 	if endIdx < len(filtered) {
 		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
-			Render("   ... " + strings.Repeat("v", 3)) + "\n")
+			Render("   ... "+strings.Repeat("v", 3)) + "\n")
 	}
 
 	content.WriteString("\n")

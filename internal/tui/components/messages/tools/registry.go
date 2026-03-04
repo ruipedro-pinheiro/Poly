@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // Factory creates a renderer for specific tool opts
@@ -88,17 +88,17 @@ func ShortenPath(path string) string {
 func statusIcon(s ToolStatus) (string, color.Color) {
 	switch s {
 	case ToolStatusPending:
-		return core.IconPending, styles.Yellow
+		return core.IconPending, theme.Yellow
 	case ToolStatusRunning:
-		return core.IconLoading, styles.Mauve
+		return core.IconLoading, theme.Mauve
 	case ToolStatusSuccess:
-		return core.IconCheck, styles.Green
+		return core.IconCheck, theme.Green
 	case ToolStatusError:
-		return core.IconError, styles.Red
+		return core.IconError, theme.Red
 	case ToolStatusDenied:
-		return core.IconError, styles.Red
+		return core.IconError, theme.Red
 	default:
-		return core.IconPending, styles.Overlay0
+		return core.IconPending, theme.Overlay0
 	}
 }
 
@@ -120,13 +120,13 @@ func FormatHeader(status ToolStatus, name string, args string, suffix string, wi
 
 	var nameStyle, argsStyle, suffixStyle lipgloss.Style
 	if isDone {
-		nameStyle = lipgloss.NewStyle().Foreground(styles.Overlay0).Bold(true)
-		argsStyle = lipgloss.NewStyle().Foreground(styles.Surface2)
-		suffixStyle = lipgloss.NewStyle().Foreground(styles.Surface2)
+		nameStyle = lipgloss.NewStyle().Foreground(theme.Overlay0).Bold(true)
+		argsStyle = lipgloss.NewStyle().Foreground(theme.Surface2)
+		suffixStyle = lipgloss.NewStyle().Foreground(theme.Surface2)
 	} else {
-		nameStyle = lipgloss.NewStyle().Foreground(styles.Text).Bold(true)
-		argsStyle = lipgloss.NewStyle().Foreground(styles.Overlay1)
-		suffixStyle = lipgloss.NewStyle().Foreground(styles.Overlay0)
+		nameStyle = lipgloss.NewStyle().Foreground(theme.Text).Bold(true)
+		argsStyle = lipgloss.NewStyle().Foreground(theme.Overlay1)
+		suffixStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 	}
 
 	header := "  " + iconStyle.Render(icon) + " " + nameStyle.Render(displayName)
@@ -170,8 +170,8 @@ func FormatResultPreview(result string, maxLines int, width int) string {
 		return ""
 	}
 
-	pipeStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	textStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	pipeStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	textStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	var output []string
 	showLines := maxLines
@@ -198,8 +198,8 @@ func FormatResultPreview(result string, maxLines int, width int) string {
 
 // FormatDetail creates a single detail line: "  ┃ detail"
 func FormatDetail(detail string) string {
-	pipeStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	textStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	pipeStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	textStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 	return "  " + pipeStyle.Render("┃ ") + textStyle.Render(detail)
 }
 
@@ -211,11 +211,11 @@ func FormatSummary(status ToolStatus, name string, description string) string {
 	isDone := status == ToolStatusSuccess
 	var nameStyle, descStyle lipgloss.Style
 	if isDone {
-		nameStyle = lipgloss.NewStyle().Foreground(styles.Overlay0).Bold(true)
-		descStyle = lipgloss.NewStyle().Foreground(styles.Surface2)
+		nameStyle = lipgloss.NewStyle().Foreground(theme.Overlay0).Bold(true)
+		descStyle = lipgloss.NewStyle().Foreground(theme.Surface2)
 	} else {
-		nameStyle = lipgloss.NewStyle().Foreground(styles.Text).Bold(true)
-		descStyle = lipgloss.NewStyle().Foreground(styles.Overlay1)
+		nameStyle = lipgloss.NewStyle().Foreground(theme.Text).Bold(true)
+		descStyle = lipgloss.NewStyle().Foreground(theme.Overlay1)
 	}
 
 	displayName := DisplayName(name)
@@ -228,8 +228,8 @@ func FormatSummary(status ToolStatus, name string, description string) string {
 
 // FormatError creates an error detail line
 func FormatError(msg string) string {
-	errStyle := lipgloss.NewStyle().Foreground(styles.Red)
-	return "  " + errStyle.Render("  " + msg)
+	errStyle := lipgloss.NewStyle().Foreground(theme.Red)
+	return "  " + errStyle.Render("  "+msg)
 }
 
 // RenderBatchSummary renders a single-line summary when all tools succeeded
@@ -257,7 +257,7 @@ func RenderBatchSummary(toolNames []string) string {
 
 	icon, iconColor := statusIcon(ToolStatusSuccess)
 	iconStyle := lipgloss.NewStyle().Foreground(iconColor)
-	textStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	textStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	total := len(toolNames)
 	return "  " + iconStyle.Render(icon) + " " +

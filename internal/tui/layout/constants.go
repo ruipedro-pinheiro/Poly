@@ -18,9 +18,9 @@ const (
 	EditorMaxHeight = 10
 
 	// Multi-line input
-	InputMaxLines       = 5 // max textarea lines before scrolling
-	InputBoxChrome      = 3 // border top + border bottom + hints line
-	InputMinHeight      = 4 // 1 line + chrome (matches InputHeight)
+	InputMaxLines  = 5 // max textarea lines before scrolling
+	InputBoxChrome = 3 // border top + border bottom + hints line
+	InputMinHeight = 4 // 1 line + chrome (matches InputHeight)
 
 	// Dialogs
 	DialogMaxWidth   = 80

@@ -61,8 +61,8 @@ func TestToolCallStatus(t *testing.T) {
 		{1, tools.ToolStatusRunning},
 		{2, tools.ToolStatusSuccess},
 		{3, tools.ToolStatusError},
-		{-1, tools.ToolStatusPending},  // default
-		{99, tools.ToolStatusPending},  // default
+		{-1, tools.ToolStatusPending}, // default
+		{99, tools.ToolStatusPending}, // default
 	}
 
 	for _, tt := range tests {

@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 	glamourstyles "github.com/charmbracelet/glamour/styles"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
@@ -18,13 +19,13 @@ func catppuccinGlamourStyle() ansi.StyleConfig {
 	style := glamourstyles.DarkStyleConfig
 
 	// Heading colors: use Mauve for visual consistency with the TUI theme
-	mauve := styles.ColorToHex(styles.Mauve)
-	lavender := styles.ColorToHex(styles.Lavender)
-	blue := styles.ColorToHex(styles.Blue)
-	green := styles.ColorToHex(styles.Green)
-	surface0 := styles.ColorToHex(styles.Surface0)
-	overlay0 := styles.ColorToHex(styles.Overlay0)
-	text := styles.ColorToHex(styles.Text)
+	mauve := styles.ColorToHex(theme.Mauve)
+	lavender := styles.ColorToHex(theme.Lavender)
+	blue := styles.ColorToHex(theme.Blue)
+	green := styles.ColorToHex(theme.Green)
+	surface0 := styles.ColorToHex(theme.Surface0)
+	overlay0 := styles.ColorToHex(theme.Overlay0)
+	text := styles.ColorToHex(theme.Text)
 
 	style.H1.Color = stringPtr(mauve)
 	style.H1.Bold = boolPtr(true)

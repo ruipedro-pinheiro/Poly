@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-	"github.com/pedromelo/poly/internal/tui/styles"
+	"github.com/pedromelo/poly/internal/theme"
 )
 
 type todosRenderer struct{}
@@ -42,7 +42,7 @@ func (t *todosRenderer) Render(width int, opts *RenderOpts) string {
 		parts = append(parts, fmt.Sprintf("%d active", active))
 	}
 	if done > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(styles.Overlay0).Render(fmt.Sprintf("%d done", done)))
+		parts = append(parts, lipgloss.NewStyle().Foreground(theme.Overlay0).Render(fmt.Sprintf("%d done", done)))
 	}
 
 	desc := ""

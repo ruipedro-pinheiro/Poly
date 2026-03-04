@@ -9,7 +9,6 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 	splashPkg "github.com/pedromelo/poly/internal/tui/components/splash"
 	"github.com/pedromelo/poly/internal/tui/core"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // renderDialogFrame wraps content in a styled dialog box centered on screen.
@@ -20,7 +19,7 @@ func (m Model) renderDialogFrame(title string, content string, preferredWidth in
 	innerW := w - 6 // padding (2*2) + border (2*1)
 
 	// Build title header
-	header := core.Title(title, innerW, styles.Mauve, styles.Surface2)
+	header := core.Title(title, innerW, theme.Mauve, theme.Surface2)
 
 	// Combine header + content
 	body := header + "\n\n" + content

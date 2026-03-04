@@ -17,7 +17,6 @@ import (
 	"github.com/pedromelo/poly/internal/skills"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
-	"github.com/pedromelo/poly/internal/tui/styles"
 	"github.com/pedromelo/poly/internal/updater"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -265,14 +264,12 @@ func initCommands() *CommandRegistry {
 		Usage:       "/theme [mocha|macchiato|frappe|latte]",
 		Handler: func(m *Model, args []string) {
 			if len(args) == 0 {
-				next := styles.NextTheme()
-				theme.SetTheme(next)
+				next := theme.NextTheme()
 				config.SetColorTheme(string(next))
 				m.status = "Theme: " + string(next)
 			} else {
-				name := styles.ThemeName(strings.ToLower(args[0]))
-				if _, ok := styles.Palettes[name]; ok {
-					styles.SetTheme(name)
+				name := theme.ThemeName(strings.ToLower(args[0]))
+				if _, ok := theme.Palettes[name]; ok {
 					theme.SetTheme(name)
 					config.SetColorTheme(string(name))
 					m.status = "Theme: " + string(name)

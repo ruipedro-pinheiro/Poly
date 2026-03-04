@@ -267,6 +267,13 @@ func (p *OAIBaseProvider) buildRequestBody(history []OAIMessage, oaiTools []OAIT
 // --- HTTP + SSE streaming ---
 
 func (p *OAIBaseProvider) streamRequest(ctx context.Context, body interface{}, token string, eventChan chan<- StreamEvent) (*oaiStreamResult, error) {
+	if p.endpoint == "" {
+		return nil, fmt.Errorf("provider %q has no endpoint configured", p.providerID)
+	}
+	if !strings.HasPrefix(p.endpoint, "http://") && !strings.HasPrefix(p.endpoint, "https://") {
+		return nil, fmt.Errorf("provider %q endpoint %q must start with http:// or https://", p.providerID, p.endpoint)
+	}
+
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err

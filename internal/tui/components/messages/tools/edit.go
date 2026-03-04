@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/pedromelo/poly/internal/tui/styles"
+	"github.com/pedromelo/poly/internal/theme"
 )
 
 type editRenderer struct{}
@@ -38,8 +38,8 @@ func (e *editRenderer) Render(width int, opts *RenderOpts) string {
 
 	suffix := ""
 	if oldLines > 0 || newLines > 0 {
-		addStyle := lipgloss.NewStyle().Foreground(styles.Green)
-		delStyle := lipgloss.NewStyle().Foreground(styles.Red)
+		addStyle := lipgloss.NewStyle().Foreground(theme.Green)
+		delStyle := lipgloss.NewStyle().Foreground(theme.Red)
 		parts := []string{}
 		if newLines > 0 {
 			parts = append(parts, addStyle.Render(fmt.Sprintf("+%d", newLines)))
@@ -69,9 +69,9 @@ func (e *editRenderer) Render(width int, opts *RenderOpts) string {
 
 // formatDiffPreview shows a mini diff with - and + lines
 func formatDiffPreview(oldStr, newStr string, width int) string {
-	pipeStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	delStyle := lipgloss.NewStyle().Foreground(styles.Red)
-	addStyle := lipgloss.NewStyle().Foreground(styles.Green)
+	pipeStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	delStyle := lipgloss.NewStyle().Foreground(theme.Red)
+	addStyle := lipgloss.NewStyle().Foreground(theme.Green)
 
 	oldLines := strings.Split(oldStr, "\n")
 	newLines := strings.Split(newStr, "\n")

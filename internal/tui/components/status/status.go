@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/layout"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // InfoType determines the visual style of the status message
@@ -107,8 +107,8 @@ func (s *statusCmp) Update(msg tea.Msg) (layout.Model, tea.Cmd) {
 }
 
 func (s *statusCmp) View() string {
-	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
-	sepStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	sepStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	sep := sepStyle.Render(" · ")
 
 	// LEFT: Streaming info
@@ -119,7 +119,7 @@ func (s *statusCmp) View() string {
 		if secs > 0 {
 			tokPerSec = float64(s.streamTokens) / secs
 		}
-		streamStyle := lipgloss.NewStyle().Foreground(styles.Mauve)
+		streamStyle := lipgloss.NewStyle().Foreground(theme.Mauve)
 		leftParts = streamStyle.Render(fmt.Sprintf("⟳ %.1fs", secs)) +
 			sep +
 			streamStyle.Render(fmt.Sprintf("%.0f tok/s", tokPerSec))
@@ -129,7 +129,7 @@ func (s *statusCmp) View() string {
 		if secs > 0 {
 			tokPerSec = float64(s.streamDoneTokens) / secs
 		}
-		doneStyle := lipgloss.NewStyle().Foreground(styles.Green)
+		doneStyle := lipgloss.NewStyle().Foreground(theme.Green)
 		leftParts = doneStyle.Render(fmt.Sprintf("✓ %.1fs", secs)) +
 			sep +
 			doneStyle.Render(fmt.Sprintf("%.0f tok/s", tokPerSec))
@@ -140,11 +140,11 @@ func (s *statusCmp) View() string {
 	if s.inputTokens+s.outputTokens > 0 {
 		tokenStr := dimStyle.Render(fmt.Sprintf("%s↑ %s↓",
 			formatTokens(s.inputTokens), formatTokens(s.outputTokens)))
-		costStr := lipgloss.NewStyle().Foreground(styles.Subtext0).
+		costStr := lipgloss.NewStyle().Foreground(theme.Subtext0).
 			Render(fmt.Sprintf("$%.2f", s.cost))
 		centerParts = tokenStr + sep + costStr
 		if s.cacheRead > 0 {
-			cacheStr := lipgloss.NewStyle().Foreground(styles.Surface2).
+			cacheStr := lipgloss.NewStyle().Foreground(theme.Surface2).
 				Render(fmt.Sprintf("(%s cached)", formatTokens(s.cacheRead)))
 			centerParts += " " + cacheStr
 		}
@@ -154,13 +154,13 @@ func (s *statusCmp) View() string {
 	statusBadge := ""
 	if s.info != nil {
 		badge := s.renderBadge(s.info.Type)
-		msgStyle := lipgloss.NewStyle().Foreground(styles.Subtext0)
+		msgStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 		statusBadge = badge + " " + msgStyle.Render(s.info.Msg)
 	} else if s.streaming {
-		statusBadge = lipgloss.NewStyle().Foreground(styles.Mauve).
+		statusBadge = lipgloss.NewStyle().Foreground(theme.Mauve).
 			Render("⟳ Streaming")
 	} else {
-		statusBadge = lipgloss.NewStyle().Foreground(styles.Green).
+		statusBadge = lipgloss.NewStyle().Foreground(theme.Green).
 			Render("✓ Ready")
 	}
 
@@ -186,7 +186,7 @@ func (s *statusCmp) View() string {
 	line := left + strings.Repeat(" ", gap) + right
 
 	return lipgloss.NewStyle().
-		Background(styles.Mantle).
+		Background(theme.Mantle).
 		Width(s.width).
 		Padding(0, 1).
 		Render(line)
@@ -201,22 +201,22 @@ func (s *statusCmp) renderBadge(t InfoType) string {
 	switch t {
 	case InfoTypeError:
 		return lipgloss.NewStyle().
-			Background(styles.Red).
-			Foreground(styles.Base).
+			Background(theme.Red).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("ERROR")
 	case InfoTypeSuccess:
 		return lipgloss.NewStyle().
-			Background(styles.Green).
-			Foreground(styles.Base).
+			Background(theme.Green).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("OK")
 	case InfoTypeWarning:
 		return lipgloss.NewStyle().
-			Background(styles.Yellow).
-			Foreground(styles.Base).
+			Background(theme.Yellow).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("WARN")
@@ -233,18 +233,18 @@ type SetProviderMsg struct {
 
 // SetTokensMsg updates token/cost display
 type SetTokensMsg struct {
-	Input          int
-	Output         int
-	CacheCreation  int
-	CacheRead      int
-	Cost           float64
+	Input         int
+	Output        int
+	CacheCreation int
+	CacheRead     int
+	Cost          float64
 }
 
 // SetStreamingMsg updates streaming speed indicators
 type SetStreamingMsg struct {
-	Active   bool
-	Elapsed  time.Duration
-	Tokens   int
+	Active  bool
+	Elapsed time.Duration
+	Tokens  int
 }
 
 // formatTokens formats a token count compactly (e.g. 1.2K, 450)

@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/layout"
 	"github.com/pedromelo/poly/internal/tui/styles"
@@ -147,10 +148,10 @@ func (p *infoPanelCmp) View() string {
 	panelStyle := lipgloss.NewStyle().
 		Width(PanelWidth).
 		Height(p.height).
-		Background(styles.Mantle).
+		Background(theme.Mantle).
 		BorderStyle(styles.Borders.Panel).
 		BorderLeft(true).
-		BorderForeground(styles.Surface1).
+		BorderForeground(theme.Surface1).
 		PaddingLeft(1).
 		PaddingRight(1)
 
@@ -166,12 +167,12 @@ func (p *infoPanelCmp) renderTitle(sb *strings.Builder, width int) {
 	if diagLen < 3 {
 		diagLen = 3
 	}
-	diagLine := core.GradientText(strings.Repeat(core.IconDiag, diagLen), styles.Mauve, styles.Lavender, false)
+	diagLine := core.GradientText(strings.Repeat(core.IconDiag, diagLen), theme.Mauve, theme.Lavender, false)
 
 	title := core.IconInfo + " Info"
-	titleRendered := core.GradientText(title, styles.Mauve, styles.Lavender, true)
+	titleRendered := core.GradientText(title, theme.Mauve, theme.Lavender, true)
 
-	hintStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 	hint := hintStyle.Render("(ctrl+i)")
 
 	// Center the hint on the right
@@ -192,10 +193,10 @@ func (p *infoPanelCmp) renderTitle(sb *strings.Builder, width int) {
 // ---------------------------------------------------------------------------
 
 func (p *infoPanelCmp) renderSession(sb *strings.Builder, width int) {
-	sb.WriteString(core.CenteredSection("Session", width, styles.Mauve, styles.Surface2) + "\n")
+	sb.WriteString(core.CenteredSection("Session", width, theme.Mauve, theme.Surface2) + "\n")
 
-	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
-	valueStyle := lipgloss.NewStyle().Foreground(styles.Text)
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	valueStyle := lipgloss.NewStyle().Foreground(theme.Text)
 
 	// Input / Output tokens
 	inputStr := formatTokens(p.inputTokens)
@@ -208,7 +209,7 @@ func (p *infoPanelCmp) renderSession(sb *strings.Builder, width int) {
 
 		// Cache info if available
 		if p.cacheRead > 0 || p.cacheCreation > 0 {
-			cacheStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
+			cacheStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 			parts := make([]string, 0, 2)
 			if p.cacheRead > 0 {
 				parts = append(parts, formatTokens(p.cacheRead)+" cached")
@@ -225,7 +226,7 @@ func (p *infoPanelCmp) renderSession(sb *strings.Builder, width int) {
 	// Cost
 	costStr := fmt.Sprintf("$%.2f", p.cost)
 	if p.cost > 0 {
-		costStyle := lipgloss.NewStyle().Foreground(styles.Subtext0)
+		costStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 		sb.WriteString("  " + costStyle.Render("Cost: "+costStr) + "\n")
 	} else {
 		sb.WriteString("  " + dimStyle.Render("Cost: $0.00") + "\n")
@@ -246,17 +247,17 @@ func (p *infoPanelCmp) renderSession(sb *strings.Builder, width int) {
 // ---------------------------------------------------------------------------
 
 func (p *infoPanelCmp) renderProviders(sb *strings.Builder, width int) {
-	sb.WriteString(core.CenteredSection("Providers", width, styles.Mauve, styles.Surface2) + "\n")
+	sb.WriteString(core.CenteredSection("Providers", width, theme.Mauve, theme.Surface2) + "\n")
 
-	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	if len(p.providers) == 0 {
 		sb.WriteString("  " + dimStyle.Render("None") + "\n")
 		return
 	}
 
-	checkStyle := lipgloss.NewStyle().Foreground(styles.Green)
-	crossStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	checkStyle := lipgloss.NewStyle().Foreground(theme.Green)
+	crossStyle := lipgloss.NewStyle().Foreground(theme.Red)
 
 	for _, prov := range p.providers {
 		var icon string
@@ -266,12 +267,12 @@ func (p *infoPanelCmp) renderProviders(sb *strings.Builder, width int) {
 			icon = crossStyle.Render(core.IconError)
 		}
 
-		nameColor := styles.Text
+		nameColor := theme.Text
 		if prov.Color != nil {
 			nameColor = prov.Color
 		}
 		if !prov.Connected {
-			nameColor = styles.Overlay0
+			nameColor = theme.Overlay0
 		}
 		nameStyle := lipgloss.NewStyle().Foreground(nameColor)
 
@@ -287,10 +288,10 @@ func (p *infoPanelCmp) renderProviders(sb *strings.Builder, width int) {
 		// Cost display
 		costInfo := ""
 		if prov.Cost > 0 {
-			costStyle := lipgloss.NewStyle().Foreground(styles.Subtext0)
+			costStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 			costInfo = " " + costStyle.Render(fmt.Sprintf("$%.2f", prov.Cost))
 		} else if !prov.HasPricing {
-			naStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
+			naStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 			costInfo = " " + naStyle.Render("N/A")
 		}
 
@@ -303,18 +304,18 @@ func (p *infoPanelCmp) renderProviders(sb *strings.Builder, width int) {
 // ---------------------------------------------------------------------------
 
 func (p *infoPanelCmp) renderModifiedFiles(sb *strings.Builder, width int) {
-	sb.WriteString(core.CenteredSection("Files", width, styles.Mauve, styles.Surface2) + "\n")
+	sb.WriteString(core.CenteredSection("Files", width, theme.Mauve, theme.Surface2) + "\n")
 
-	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	if len(p.modifiedFiles) == 0 {
 		sb.WriteString("  " + dimStyle.Render("None") + "\n")
 		return
 	}
 
-	addStyle := lipgloss.NewStyle().Foreground(styles.Green)
-	delStyle := lipgloss.NewStyle().Foreground(styles.Red)
-	fileStyle := lipgloss.NewStyle().Foreground(styles.Text)
+	addStyle := lipgloss.NewStyle().Foreground(theme.Green)
+	delStyle := lipgloss.NewStyle().Foreground(theme.Red)
+	fileStyle := lipgloss.NewStyle().Foreground(theme.Text)
 
 	for _, f := range p.modifiedFiles {
 		var stats string
@@ -350,18 +351,18 @@ func (p *infoPanelCmp) renderModifiedFiles(sb *strings.Builder, width int) {
 // ---------------------------------------------------------------------------
 
 func (p *infoPanelCmp) renderMCP(sb *strings.Builder, width int) {
-	sb.WriteString(core.CenteredSection("MCP", width, styles.Mauve, styles.Surface2) + "\n")
+	sb.WriteString(core.CenteredSection("MCP", width, theme.Mauve, theme.Surface2) + "\n")
 
-	dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	if len(p.mcpServers) == 0 {
 		sb.WriteString("  " + dimStyle.Render("None") + "\n")
 		return
 	}
 
-	checkStyle := lipgloss.NewStyle().Foreground(styles.Green)
-	crossStyle := lipgloss.NewStyle().Foreground(styles.Red)
-	countStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	checkStyle := lipgloss.NewStyle().Foreground(theme.Green)
+	crossStyle := lipgloss.NewStyle().Foreground(theme.Red)
+	countStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	for _, srv := range p.mcpServers {
 		var icon string
@@ -371,7 +372,7 @@ func (p *infoPanelCmp) renderMCP(sb *strings.Builder, width int) {
 			icon = crossStyle.Render(core.IconError)
 		}
 
-		nameStyle := lipgloss.NewStyle().Foreground(styles.Text)
+		nameStyle := lipgloss.NewStyle().Foreground(theme.Text)
 		if !srv.Connected {
 			nameStyle = dimStyle
 		}
@@ -399,14 +400,14 @@ func (p *infoPanelCmp) renderMCP(sb *strings.Builder, width int) {
 // ---------------------------------------------------------------------------
 
 func (p *infoPanelCmp) renderStatus(sb *strings.Builder, width int) {
-	sb.WriteString(core.CenteredSection("Status", width, styles.Mauve, styles.Surface2) + "\n")
+	sb.WriteString(core.CenteredSection("Status", width, theme.Mauve, theme.Surface2) + "\n")
 
 	var badges []string
 
 	if p.yoloMode {
 		badge := lipgloss.NewStyle().
-			Background(styles.Red).
-			Foreground(styles.Base).
+			Background(theme.Red).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("YOLO")
@@ -415,8 +416,8 @@ func (p *infoPanelCmp) renderStatus(sb *strings.Builder, width int) {
 
 	if p.sandboxMode {
 		badge := lipgloss.NewStyle().
-			Background(styles.Blue).
-			Foreground(styles.Base).
+			Background(theme.Blue).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("SANDBOX")
@@ -425,8 +426,8 @@ func (p *infoPanelCmp) renderStatus(sb *strings.Builder, width int) {
 
 	if p.thinkingMode {
 		badge := lipgloss.NewStyle().
-			Background(styles.Lavender).
-			Foreground(styles.Base).
+			Background(theme.Lavender).
+			Foreground(theme.Base).
 			Bold(true).
 			Padding(0, 1).
 			Render("THINKING")
@@ -434,7 +435,7 @@ func (p *infoPanelCmp) renderStatus(sb *strings.Builder, width int) {
 	}
 
 	if len(badges) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+		dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 		sb.WriteString("  " + dimStyle.Render("Standard mode") + "\n")
 		return
 	}
@@ -489,16 +490,16 @@ func renderTokenBar(pct int, width int) string {
 	var filledColor color.Color
 	switch {
 	case pct >= 80:
-		filledColor = styles.Red
+		filledColor = theme.Red
 	case pct >= 50:
-		filledColor = styles.Yellow
+		filledColor = theme.Yellow
 	default:
-		filledColor = styles.Mauve
+		filledColor = theme.Mauve
 	}
 
 	filledStyle := lipgloss.NewStyle().Foreground(filledColor)
-	emptyStyle := lipgloss.NewStyle().Foreground(styles.Surface1)
-	pctStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
+	emptyStyle := lipgloss.NewStyle().Foreground(theme.Surface1)
+	pctStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	return filledStyle.Render(strings.Repeat("\u2593", filled)) +
 		emptyStyle.Render(strings.Repeat("\u2591", empty)) +

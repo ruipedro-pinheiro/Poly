@@ -18,7 +18,6 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/tui"
-	"github.com/pedromelo/poly/internal/tui/styles"
 	"golang.org/x/term"
 )
 
@@ -48,8 +47,8 @@ func main() {
 
 	// Apply saved color theme
 	if savedTheme := config.GetColorTheme(); savedTheme != "" {
-		name := styles.ThemeName(savedTheme)
-		if _, ok := styles.Palettes[name]; ok {
+		name := theme.ThemeName(savedTheme)
+		if _, ok := theme.Palettes[name]; ok {
 			theme.SetTheme(name)
 		}
 	}

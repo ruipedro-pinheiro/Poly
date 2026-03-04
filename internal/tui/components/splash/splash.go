@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/layout"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // ProviderStatus represents a provider's connection state
@@ -54,9 +54,9 @@ func (s *splashCmp) View() string {
 	logoWidth := layout.SplashLogoWidth
 	diag := core.IconDiag
 
-	diagFull := core.GradientText(strings.Repeat(diag, logoWidth), styles.Mauve, styles.Lavender, false)
-	diagShort := core.GradientText(strings.Repeat(diag, 3), styles.Mauve, styles.Lavender, false)
-	titleText := core.GradientText("\u25C7  P  O  L  Y", styles.Mauve, styles.Lavender, true)
+	diagFull := core.GradientText(strings.Repeat(diag, logoWidth), theme.Mauve, theme.Lavender, false)
+	diagShort := core.GradientText(strings.Repeat(diag, 3), theme.Mauve, theme.Lavender, false)
+	titleText := core.GradientText("\u25C7  P  O  L  Y", theme.Mauve, theme.Lavender, true)
 
 	// Calculate inner padding to center title in the box
 	titleVisualWidth := layout.SplashTitleLen
@@ -76,7 +76,7 @@ func (s *splashCmp) View() string {
 
 	// Subtitle
 	subtitle := lipgloss.NewStyle().
-		Foreground(styles.Overlay1).
+		Foreground(theme.Overlay1).
 		Italic(true).
 		Render("multi-model terminal interface")
 
@@ -90,7 +90,7 @@ func (s *splashCmp) View() string {
 			clr = p.Color
 		} else {
 			icon = core.IconError
-			clr = styles.Overlay0
+			clr = theme.Overlay0
 		}
 		iconStr := lipgloss.NewStyle().Foreground(clr).Render(icon)
 		nameStr := lipgloss.NewStyle().Foreground(clr).Render(p.Name)
@@ -99,9 +99,9 @@ func (s *splashCmp) View() string {
 	providerRow := strings.Join(provParts, "     ")
 
 	// Hint + version
-	helpStyle := lipgloss.NewStyle().Foreground(styles.Overlay0)
-	versionStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
-	sepStyle := lipgloss.NewStyle().Foreground(styles.Surface2)
+	helpStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	versionStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	sepStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 
 	hintLine := helpStyle.Render("type /help for commands") +
 		sepStyle.Render(" \u00B7 ") +

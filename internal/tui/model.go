@@ -14,12 +14,12 @@ import (
 	"github.com/pedromelo/poly/internal/session"
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tools"
-	"github.com/pedromelo/poly/internal/updater"
-	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 	"github.com/pedromelo/poly/internal/tui/components/header"
 	"github.com/pedromelo/poly/internal/tui/components/infopanel"
 	"github.com/pedromelo/poly/internal/tui/components/splash"
 	"github.com/pedromelo/poly/internal/tui/components/status"
+	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
+	"github.com/pedromelo/poly/internal/updater"
 )
 
 // Model is the main TUI model
@@ -36,9 +36,9 @@ type Model struct {
 	textarea textarea.Model
 	keys     KeyMap
 
-	messages   []Message
-	status     string
-	focused    string // "input" or "messages"
+	messages    []Message
+	status      string
+	focused     string // "input" or "messages"
 	isStreaming bool
 
 	// Providers
@@ -58,10 +58,10 @@ type Model struct {
 	authStatusMsg        string // success/error message shown in Control Room
 
 	// Model Picker state
-	modelPickerIndex   int
-	modelPickerModels  []modelOption
-	modelPickerFilter  string
-	recentModels       []modelOption
+	modelPickerIndex  int
+	modelPickerModels []modelOption
+	modelPickerFilter string
+	recentModels      []modelOption
 
 	// Table Ronde state for @all orchestration
 	tableRonde *tableRondeState
@@ -86,7 +86,7 @@ type Model struct {
 	streamStartTime  time.Time
 	streamTokenCount int
 
-	modifiedFiles   []string
+	modifiedFiles []string
 
 	// Command palette state
 	paletteFilter string
@@ -137,10 +137,10 @@ type Model struct {
 	sessionListFiltering bool   // true when filter input is active
 
 	// Components
-	headerBar     header.Header
-	statusBar     status.StatusCmp
-	splashCmp     splash.Splash
-	infoPanelCmp  infopanel.InfoPanel
+	headerBar    header.Header
+	statusBar    status.StatusCmp
+	splashCmp    splash.Splash
+	infoPanelCmp infopanel.InfoPanel
 }
 
 // New creates a new TUI model
@@ -300,4 +300,3 @@ func checkForUpdate() tea.Cmd {
 		return nil
 	}
 }
-
