@@ -11,10 +11,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/pedromelo/poly/internal/auth"
-	"github.com/pedromelo/poly/internal/security"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -274,51 +272,21 @@ func (p *OAIBaseProvider) streamRequest(ctx context.Context, body interface{}, t
 		return nil, err
 	}
 
-	var resp *http.Response
-	var lastErr error
-
-	for attempt := 0; attempt <= MaxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(RetryDelay(attempt - 1)):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(jsonBody))
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		if p.setHeaders != nil {
-			p.setHeaders(req, token)
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-
-		resp, err = p.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			break
-		}
-
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
-
-		if !ShouldRetry(resp.StatusCode) {
-			return nil, lastErr
-		}
+	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, err
 	}
 
-	if resp == nil || resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	req.Header.Set("Content-Type", "application/json")
+	if p.setHeaders != nil {
+		p.setHeaders(req, token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := DoWithRetry(ctx, p.httpClient, req)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 

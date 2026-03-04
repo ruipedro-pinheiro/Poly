@@ -11,9 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/pedromelo/poly/internal/security"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -408,62 +406,33 @@ func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinki
 		url += "/chat/completions"
 	}
 
-	var lastErr error
-	for attempt := 0; attempt <= MaxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(RetryDelay(attempt - 1)):
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	if p.config.APIKey != "" {
+		switch p.config.Format {
+		case "anthropic":
+			req.Header.Set("x-api-key", p.config.APIKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+			if thinkingMode {
+				req.Header.Set("anthropic-beta", "interleaved-thinking-2025-05-14")
 			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		if p.config.APIKey != "" {
-			switch p.config.Format {
-			case "anthropic":
+		case "google":
+			// Google uses URL param
+		default:
+			if p.config.AuthHeader == "x-api-key" {
 				req.Header.Set("x-api-key", p.config.APIKey)
-				req.Header.Set("anthropic-version", "2023-06-01")
-				if thinkingMode {
-					req.Header.Set("anthropic-beta", "interleaved-thinking-2025-05-14")
-				}
-			case "google":
-				// Google uses URL param
-			default:
-				if p.config.AuthHeader == "x-api-key" {
-					req.Header.Set("x-api-key", p.config.APIKey)
-				} else {
-					req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
-				}
+			} else {
+				req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 			}
-		}
-
-		resp, err := p.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			return resp, nil
-		}
-
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
-
-		if !ShouldRetry(resp.StatusCode) {
-			return nil, lastErr
 		}
 	}
 
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return DoWithRetry(ctx, p.httpClient, req)
 }
 
 // --- Stream parsers that return results with tool calls ---
