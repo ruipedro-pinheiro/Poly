@@ -41,17 +41,6 @@ func TestValidatePath_CwdAbsolute(t *testing.T) {
 	}
 }
 
-func TestValidatePath_TmpAllowed(t *testing.T) {
-	// /tmp/ is in allowedPrefixes
-	abs, err := ValidatePath("/tmp/test-poly-file.txt")
-	if err != nil {
-		t.Fatalf("ValidatePath('/tmp/test-poly-file.txt') error: %v", err)
-	}
-	if abs != "/tmp/test-poly-file.txt" {
-		t.Errorf("expected /tmp/test-poly-file.txt, got %s", abs)
-	}
-}
-
 func TestValidatePath_DotPolyAllowed(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

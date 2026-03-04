@@ -2,17 +2,10 @@ package security
 
 import (
 	"encoding/json"
-	"strings"
 )
 
 // SanitizeResponseBody extracts a safe error message from an HTTP response body.
-// API error responses can contain tokens, keys, or sensitive internal details.
-// This function:
-//  1. Tries to extract a structured error message from JSON (all major APIs return JSON errors)
-//  2. Falls back to a truncated version of the raw body (max 200 chars)
-//  3. Never returns raw response bodies verbatim
-//
-// Callers replace string(body) with SanitizeResponseBody(body) in error formatting.
+// This function is critical to prevent API tokens or sensitive data from leaking into the UI.
 func SanitizeResponseBody(body []byte) string {
 	if len(body) == 0 {
 		return "(empty response)"
@@ -23,9 +16,9 @@ func SanitizeResponseBody(body []byte) string {
 		return truncate(msg, 500)
 	}
 
-	// Fallback: truncate raw body aggressively
-	s := strings.TrimSpace(string(body))
-	return truncate(s, 200)
+	// Fallback: strictly avoid dumping raw body if it's not JSON.
+	// This prevents leaking keys that might be in an unexpected HTML/text error page.
+	return "unrecognized error format (raw body hidden for security)"
 }
 
 // extractJSONErrorMessage tries multiple common API error formats.
@@ -36,26 +29,21 @@ func extractJSONErrorMessage(body []byte) string {
 	}
 
 	// OpenAI / xAI / GitHub format: {"error": {"message": "...", "type": "...", "code": "..."}}
-	// Also Anthropic: {"type": "error", "error": {"type": "...", "message": "..."}}
 	if errField, ok := obj["error"]; ok {
 		switch v := errField.(type) {
 		case map[string]interface{}:
 			if msg, ok := v["message"].(string); ok && msg != "" {
 				return msg
 			}
-			// Some APIs use "error": {"error": "description"}
 			if desc, ok := v["error"].(string); ok && desc != "" {
 				return desc
 			}
 		case string:
-			// Simple: {"error": "invalid_grant"}
 			if v != "" {
 				return v
 			}
 		}
 	}
-
-	// Google format: {"error": {"message": "...", "status": "..."}} — already handled above
 
 	// Simple "message" field: {"message": "Not Found"}
 	if msg, ok := obj["message"].(string); ok && msg != "" {

@@ -16,7 +16,9 @@ import (
 // handleStreamMsg processes a streaming event from a provider
 func (m Model) handleStreamMsg(msg StreamMsg) (tea.Model, tea.Cmd) {
 	if !m.isStreaming {
+		streamMu.Lock()
 		streamEventChan = nil
+		streamMu.Unlock()
 		return m, nil
 	}
 	if len(m.messages) == 0 {
