@@ -288,15 +288,22 @@ func (m Model) handleCompactDoneMsg(msg CompactDoneMsg) (tea.Model, tea.Cmd) {
 func (m *Model) toSessionMsgs() []session.Message {
 	sessionMsgs := make([]session.Message, len(m.messages))
 	for i, msg := range m.messages {
-		sessionMsgs[i] = session.Message{
-			Role:         msg.Role,
-			Content:      msg.Content,
-			Provider:     msg.Provider,
-			InputTokens:  msg.InputTokens,
-			OutputTokens: msg.OutputTokens,
-		}
+		sessionMsgs[i] = m.toSessionMsg(msg)
 	}
 	return sessionMsgs
+}
+
+// toSessionMsg converts a single TUI message to a session message
+func (m *Model) toSessionMsg(msg Message) session.Message {
+	return session.Message{
+		Role:         msg.Role,
+		Content:      msg.Content,
+		Provider:     msg.Provider,
+		Thinking:     msg.Thinking,
+		Images:       msg.Images,
+		InputTokens:  msg.InputTokens,
+		OutputTokens: msg.OutputTokens,
+	}
 }
 
 // buildLLMMessagesForCompaction converts TUI messages to LLM messages

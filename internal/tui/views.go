@@ -551,16 +551,7 @@ func renderToolCallBlock(calls []ToolCallData, width int) string {
 // addMessage adds a message and persists it to the session
 func (m *Model) addMessage(msg Message) {
 	m.messages = append(m.messages, msg)
-	// Persist to session
-	_ = session.AddMessage(session.Message{
-		Role:         msg.Role,
-		Content:      msg.Content,
-		Provider:     msg.Provider,
-		Thinking:     msg.Thinking,
-		Images:       msg.Images,
-		InputTokens:  msg.InputTokens,
-		OutputTokens: msg.OutputTokens,
-	})
+	_ = session.AddMessage(m.toSessionMsg(msg))
 }
 
 // saveLastMessage persists the last message (called when streaming completes)
@@ -584,14 +575,5 @@ func (m *Model) saveMessageAt(idx int) {
 	if idx < 0 || idx >= len(m.messages) {
 		return
 	}
-	msg := m.messages[idx]
-	_ = session.AddMessage(session.Message{
-		Role:         msg.Role,
-		Content:      msg.Content,
-		Provider:     msg.Provider,
-		Thinking:     msg.Thinking,
-		Images:       msg.Images,
-		InputTokens:  msg.InputTokens,
-		OutputTokens: msg.OutputTokens,
-	})
+	_ = session.AddMessage(m.toSessionMsg(m.messages[idx]))
 }

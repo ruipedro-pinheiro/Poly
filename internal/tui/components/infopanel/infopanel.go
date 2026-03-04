@@ -13,7 +13,6 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/layout"
-	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
 // PanelWidth is the fixed width of the info panel overlay.
@@ -149,7 +148,7 @@ func (p *infoPanelCmp) View() string {
 		Width(PanelWidth).
 		Height(p.height).
 		Background(theme.Mantle).
-		BorderStyle(styles.Borders.Panel).
+		BorderStyle(lipgloss.NormalBorder()).
 		BorderLeft(true).
 		BorderForeground(theme.Surface1).
 		PaddingLeft(1).
