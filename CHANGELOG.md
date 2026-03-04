@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-03-04
+
+### Changed
+- **TUI Visual Overhaul**: Reworked dialogs, list rows, selection styles, hint bars, and message layout for a cleaner and more consistent interface.
+- **Header/Input Clarity**: Simplified top-bar and input hints to reduce misleading state display and make routing behavior more explicit.
+- **Icon System Cleanup**: Standardized icon usage across the TUI, removed confusing circular markers in key UI locations, and improved fallback behavior.
+
+### Fixed
+- **Provider Routing UX**: Fixed ambiguous `@provider` parsing by switching from substring matching to explicit mention matching.
+- **Status Bar Stability**: Prevented long status messages from visually breaking layout by adding truncation and safer rendering rules.
+- **Modal/List Rendering Bugs**: Fixed width/selection inconsistencies that caused floating backgrounds, clipped rows, and uneven alignment.
+
 ## [0.7.0] - 2026-03-04
 
 ### Added
