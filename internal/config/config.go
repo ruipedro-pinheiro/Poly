@@ -25,6 +25,15 @@ type ProviderConfig struct {
 	AuthHeader    string            `json:"auth_header"`     // "Bearer", "x-api-key", etc.
 	OAuthClientID string            `json:"oauth_client_id"` // OAuth client ID for providers using OAuth
 	CostTier      int               `json:"cost_tier"`       // 1=cheap, 2=mid, 3=expensive (for @all cascade ordering)
+
+	// ReasoningModels lists model prefixes that use reasoning tokens.
+	// For these models, max_completion_tokens is sent instead of max_tokens.
+	// Config-driven to avoid hardcoding model names in provider code.
+	ReasoningModels []string `json:"reasoning_models,omitempty"`
+
+	// ReasoningEffortModels lists model prefixes that accept the reasoning_effort parameter.
+	// This is a subset of ReasoningModels — some models reason by default but reject reasoning_effort.
+	ReasoningEffortModels []string `json:"reasoning_effort_models,omitempty"`
 }
 
 // MCPServerConfig defines an MCP server in the config file
@@ -301,6 +310,13 @@ func mergeConfig(base, user *Config) *Config {
 					existing.Models[k] = v
 				}
 			}
+			// Merge reasoning config (user overrides entirely if provided)
+			if len(p.ReasoningModels) > 0 {
+				existing.ReasoningModels = p.ReasoningModels
+			}
+			if len(p.ReasoningEffortModels) > 0 {
+				existing.ReasoningEffortModels = p.ReasoningEffortModels
+			}
 			base.Providers[id] = existing
 		} else {
 			base.Providers[id] = p
@@ -414,12 +430,14 @@ func DefaultConfig() *Config {
 				Color:         "#D97706",
 				CostTier:      3,
 				Models: map[string]string{
-					"default": "claude-sonnet-4-5-20250929",
-					"fast":    "claude-haiku-4-5-20250929",
-					"think":   "claude-sonnet-4-5-20250929",
-					"opus":    "claude-opus-4-5-20251101",
-					"sonnet4": "claude-sonnet-4-20250514",
+					"default": "claude-sonnet-4-6",
+					"fast":    "claude-haiku-4-5",
+					"think":   "claude-sonnet-4-6",
+					"opus":    "claude-opus-4-6",
+					"sonnet":  "claude-sonnet-4-6",
 				},
+				// Claude uses extended thinking (budgetTokens), not reasoning_effort.
+				// Reasoning detection handled natively by the Anthropic provider.
 			},
 			"gpt": {
 				ID:        "gpt",
@@ -435,10 +453,13 @@ func DefaultConfig() *Config {
 					"default": "gpt-4.1",
 					"fast":    "gpt-4.1-mini",
 					"nano":    "gpt-4.1-nano",
-					"think":   "o4-mini",
+					"think":   "gpt-5-mini",
+					"gpt5":    "gpt-5.2",
 					"o3":      "o3",
-					"o3pro":   "o3-pro",
+					"o4":      "o4-mini",
 				},
+				ReasoningModels:       []string{"gpt-5", "o3", "o4"},
+				ReasoningEffortModels: []string{"gpt-5", "o3", "o4"},
 			},
 			"gemini": {
 				ID:        "gemini",
@@ -456,6 +477,8 @@ func DefaultConfig() *Config {
 					"think":   "gemini-2.5-pro",
 					"lite":    "gemini-2.5-flash-lite",
 				},
+				// Gemini uses thinkingConfig, not reasoning_effort.
+				// Reasoning detection handled natively by the Gemini provider.
 			},
 			"grok": {
 				ID:        "grok",
@@ -468,10 +491,14 @@ func DefaultConfig() *Config {
 				Color:     "#1DA1F2",
 				CostTier:  2,
 				Models: map[string]string{
-					"default": "grok-3",
-					"fast":    "grok-3-fast",
-					"mini":    "grok-3-mini-beta",
+					"default":    "grok-4-0709",
+					"fast":       "grok-4-1-fast-non-reasoning",
+					"think":      "grok-3-mini",
+					"think-fast": "grok-4-1-fast-reasoning",
+					"code":       "grok-code-fast-1",
 				},
+				ReasoningModels:       []string{"grok-3-mini", "grok-4-0", "grok-4-fast-reasoning", "grok-4-1-fast-reasoning", "grok-code"},
+				ReasoningEffortModels: []string{"grok-3-mini"},
 			},
 			"copilot": {
 				ID:        "copilot",
@@ -487,8 +514,10 @@ func DefaultConfig() *Config {
 					"default": "gpt-4o",
 					"fast":    "gpt-4o-mini",
 					"claude":  "claude-sonnet-4",
-					"think":   "o3-mini",
+					"think":   "o4-mini",
 				},
+				ReasoningModels:       []string{"o3", "o4"},
+				ReasoningEffortModels: []string{"o3", "o4"},
 			},
 			"ollama": {
 				ID:        "ollama",

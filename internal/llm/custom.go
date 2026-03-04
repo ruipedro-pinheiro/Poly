@@ -130,14 +130,14 @@ func (p *CustomProvider) agenticLoopOpenAI(ctx context.Context, initialMessages 
 			Messages: msgs,
 			Tools:    oaiTools,
 		}
-		if thinkingMode && isReasoningModel(p.config.Model) {
+		if thinkingMode && IsReasoningModel(p.config.ID, p.config.Model) {
 			body.ReasoningEffort = "high"
 			body.MaxCompletionTokens = p.config.MaxTokens
 		} else {
 			body.MaxTokens = p.config.MaxTokens
 		}
 
-		if thinkingMode && isReasoningModel(p.config.Model) {
+		if thinkingMode && IsReasoningModel(p.config.ID, p.config.Model) {
 			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
 		}
 

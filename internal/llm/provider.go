@@ -258,3 +258,40 @@ func GetDefaultModels() map[string]string {
 	}
 	return result
 }
+
+// IsReasoningModel checks if a model uses reasoning tokens for the given provider.
+// Uses config-driven prefix matching — no model names hardcoded in Go code.
+// Models with "non-reasoning" in the name are always excluded.
+func IsReasoningModel(providerID, model string) bool {
+	if strings.Contains(model, "non-reasoning") {
+		return false
+	}
+	cfg := config.Get()
+	p, ok := cfg.Providers[providerID]
+	if !ok {
+		return false
+	}
+	for _, prefix := range p.ReasoningModels {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// SupportsReasoningEffort checks if a model accepts the reasoning_effort parameter.
+// This is a subset of reasoning models — some models reason by default but reject
+// reasoning_effort (e.g. grok-4 reasons automatically but errors on reasoning_effort).
+func SupportsReasoningEffort(providerID, model string) bool {
+	cfg := config.Get()
+	p, ok := cfg.Providers[providerID]
+	if !ok {
+		return false
+	}
+	for _, prefix := range p.ReasoningEffortModels {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
+}

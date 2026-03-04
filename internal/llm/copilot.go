@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -112,11 +113,23 @@ func (p *CopilotProvider) agenticLoop(ctx context.Context, initialMessages []Mes
 			Stream:        true,
 			Messages:      history,
 			StreamOptions: &OAIStreamOptions{IncludeUsage: true},
-			MaxTokens:     p.config.MaxTokens,
+		}
+
+		if thinkingMode && IsReasoningModel("copilot", p.config.Model) {
+			body.MaxCompletionTokens = p.config.MaxTokens
+			if SupportsReasoningEffort("copilot", p.config.Model) {
+				body.ReasoningEffort = "high"
+			}
+		} else {
+			body.MaxTokens = p.config.MaxTokens
 		}
 
 		if len(oaiTools) > 0 {
 			body.Tools = oaiTools
+		}
+
+		if thinkingMode && IsReasoningModel("copilot", p.config.Model) {
+			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
 		}
 
 		result, err := p.streamRequest(ctx, body, token, eventChan)
@@ -207,7 +220,7 @@ func (p *CopilotProvider) agenticLoop(ctx context.Context, initialMessages []Mes
 	eventChan <- StreamEvent{
 		Type: "done",
 		Response: &Response{
-			Content:  "",
+			Content:  fullContent.String(),
 			Provider: "copilot",
 			Model:    p.config.Model,
 		},
@@ -376,6 +389,8 @@ func (p *CopilotProvider) streamRequest(ctx context.Context, body interface{}, t
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.rawArgs), &args); err == nil {
 				tc.input = args
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: failed to parse tool call args for %q: %v\n", tc.name, err)
 			}
 		}
 		if tc.input == nil {

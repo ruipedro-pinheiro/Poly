@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -81,13 +82,13 @@ func (p *GrokProvider) Stream(ctx context.Context, messages []Message, toolDefs 
 			return
 		}
 
-		p.agenticLoop(ctx, messages, toolDefs, apiKey, eventChan, GetRole(opts))
+		p.agenticLoop(ctx, messages, toolDefs, apiKey, eventChan, GetRole(opts), GetThinkingMode(opts))
 	}()
 
 	return eventChan
 }
 
-func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, apiKey string, eventChan chan<- StreamEvent, role string) {
+func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Message, toolDefs []ToolDefinition, apiKey string, eventChan chan<- StreamEvent, role string, thinkingMode bool) {
 	// Build conversation history with typed structs
 	history := make([]OAIMessage, 0, len(initialMessages)+1)
 
@@ -106,16 +107,30 @@ func (p *GrokProvider) agenticLoop(ctx context.Context, initialMessages []Messag
 	var fullContent strings.Builder
 
 	for turn := 0; turn < GetMaxToolTurns(); turn++ {
+		isReasoning := IsReasoningModel("grok", p.config.Model)
+
 		body := OAIRequestBody{
 			Model:         p.config.Model,
-			MaxTokens:     p.config.MaxTokens,
 			Stream:        true,
 			Messages:      history,
 			StreamOptions: &OAIStreamOptions{IncludeUsage: true},
 		}
 
+		if isReasoning {
+			body.MaxCompletionTokens = p.config.MaxTokens
+			if thinkingMode && SupportsReasoningEffort("grok", p.config.Model) {
+				body.ReasoningEffort = "high"
+			}
+		} else {
+			body.MaxTokens = p.config.MaxTokens
+		}
+
 		if len(oaiTools) > 0 {
 			body.Tools = oaiTools
+		}
+
+		if thinkingMode && isReasoning {
+			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
 		}
 
 		result, err := p.streamRequest(ctx, body, apiKey, eventChan)
@@ -291,8 +306,9 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body interface{}, apiK
 		var event struct {
 			Choices []struct {
 				Delta struct {
-					Content   string `json:"content"`
-					ToolCalls []struct {
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
+					ToolCalls        []struct {
 						Index    int    `json:"index"`
 						ID       string `json:"id"`
 						Function struct {
@@ -331,6 +347,11 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body interface{}, apiK
 			eventChan <- StreamEvent{Type: "content", Content: delta.Content}
 		}
 
+		// Handle reasoning content (grok-3-mini returns this in Chat Completions)
+		if delta.ReasoningContent != "" {
+			eventChan <- StreamEvent{Type: "thinking", Thinking: delta.ReasoningContent}
+		}
+
 		// Handle tool calls
 		for _, tc := range delta.ToolCalls {
 			if tc.ID != "" {
@@ -357,6 +378,8 @@ func (p *GrokProvider) streamRequest(ctx context.Context, body interface{}, apiK
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.rawArgs), &args); err == nil {
 				tc.input = args
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: failed to parse tool call args for %q: %v\n", tc.name, err)
 			}
 		}
 		if tc.input == nil {

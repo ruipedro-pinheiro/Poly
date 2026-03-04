@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -113,9 +114,11 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 			StreamOptions: &OAIStreamOptions{IncludeUsage: true},
 		}
 
-		if thinkingMode && isReasoningModel(p.config.Model) {
-			body.ReasoningEffort = "high"
+		if thinkingMode && IsReasoningModel("gpt", p.config.Model) {
 			body.MaxCompletionTokens = p.config.MaxTokens
+			if SupportsReasoningEffort("gpt", p.config.Model) {
+				body.ReasoningEffort = "high"
+			}
 		} else {
 			body.MaxTokens = p.config.MaxTokens
 		}
@@ -124,7 +127,7 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 			body.Tools = oaiTools
 		}
 
-		if thinkingMode && isReasoningModel(p.config.Model) {
+		if thinkingMode && IsReasoningModel("gpt", p.config.Model) {
 			eventChan <- StreamEvent{Type: "thinking", Thinking: "(reasoning...)"}
 		}
 
@@ -206,7 +209,7 @@ func (p *GPTProvider) agenticLoop(ctx context.Context, initialMessages []Message
 	eventChan <- StreamEvent{
 		Type: "done",
 		Response: &Response{
-			Content:  "",
+			Content:  fullContent.String(),
 			Provider: "gpt",
 			Model:    p.config.Model,
 		},
@@ -233,10 +236,6 @@ type gptToolCall struct {
 	name    string
 	input   map[string]interface{}
 	rawArgs string
-}
-
-func isReasoningModel(model string) bool {
-	return strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
 }
 
 func (p *GPTProvider) streamRequest(ctx context.Context, body interface{}, apiKey string, eventChan chan<- StreamEvent) (*gptStreamResult, error) {
@@ -379,6 +378,8 @@ func (p *GPTProvider) streamRequest(ctx context.Context, body interface{}, apiKe
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.rawArgs), &args); err == nil {
 				tc.input = args
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: failed to parse tool call args for %q: %v\n", tc.name, err)
 			}
 		}
 		if tc.input == nil {
