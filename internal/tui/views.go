@@ -53,24 +53,24 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) renderChat() string {
-	header := m.renderHeader()
-
-	// Chat area with consistent padding
+	header := m.headerBar.View()
+	
+	// Main viewport with minimal side padding
 	chatArea := lipgloss.NewStyle().
 		Width(m.chatWidth()).
 		Height(m.viewport.Height()).
-		Padding(1, 2).
+		Padding(0, 1).
 		Render(m.viewport.View())
 
 	inputArea := m.renderInput()
-	statusBar := m.renderStatusBar()
+	statusBar := m.statusBar.View()
 
 	result := lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
+		theme.HeaderStyle.Width(m.width).Render(header),
 		chatArea,
-		inputArea,
-		statusBar,
+		theme.InputStyle.Width(m.width).Render(inputArea),
+		theme.StatusStyle.Width(m.width).Render(statusBar),
 	)
 
 	if m.infoPanelCmp.IsVisible() && m.width >= 100 {
@@ -84,49 +84,30 @@ func (m Model) renderChat() string {
 func overlayRight(base, panel string, totalWidth int) string {
 	baseLines := strings.Split(base, "\n")
 	panelLines := strings.Split(panel, "\n")
-
 	panelW := lipgloss.Width(panel)
-	if panelW == 0 {
-		return base
-	}
+	if panelW == 0 { return base }
 
 	out := make([]string, len(baseLines))
 	for i, baseLine := range baseLines {
 		if i < len(panelLines) && panelLines[i] != "" {
 			baseW := lipgloss.Width(baseLine)
 			availBase := totalWidth - panelW
-			if availBase < 0 {
-				availBase = 0
-			}
+			if availBase < 0 { availBase = 0 }
 			if baseW > availBase {
 				baseLine = lipgloss.NewStyle().Width(availBase).Render(baseLine)
 			} else {
 				pad := availBase - baseW
-				if pad > 0 {
-					baseLine += strings.Repeat(" ", pad)
-				}
+				if pad > 0 { baseLine += strings.Repeat(" ", pad) }
 			}
 			out[i] = baseLine + panelLines[i]
 		} else {
 			out[i] = baseLine
 		}
 	}
-
 	return strings.Join(out, "\n")
 }
 
-func (m Model) renderHeader() string {
-	return theme.HeaderStyle.Width(m.width).Render(m.headerBar.View())
-}
-
 func (m Model) renderInput() string {
-	style := theme.InputBoxStyle
-	if m.focused == "input" {
-		style = theme.InputFocusedStyle
-	}
-
-	style = style.Width(m.width - 4).MarginLeft(2)
-
 	providerDot := lipgloss.NewStyle().
 		Foreground(theme.ProviderColor(m.defaultProvider)).
 		Render("● ")
@@ -135,48 +116,30 @@ func (m Model) renderInput() string {
 	if len(m.pendingImages) > 0 {
 		imageIndicator = lipgloss.NewStyle().
 			Foreground(theme.Green).
-			Render(fmt.Sprintf(" [img:%d] ", len(m.pendingImages)))
+			Render(fmt.Sprintf("[%d images] ", len(m.pendingImages)))
 	}
 
 	textArea := m.textarea.View()
-	inputContent := providerDot + imageIndicator + textArea
-
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).MarginLeft(4)
-	var hints string
+	
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	hints := ""
 	if m.isStreaming {
-		hints = hintStyle.Render("esc stop")
+		hints = " (esc to stop)"
 	} else if strings.TrimSpace(m.textarea.Value()) == "" {
-		hints = hintStyle.Render("enter send · @provider")
+		hints = " (type to chat, @ to route)"
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		style.Render(inputContent),
-		hints,
-		"", // Extra spacer
-	)
-}
-
-func (m Model) renderStatusBar() string {
-	return theme.StatusBarStyle.Width(m.width).Render(m.statusBar.View())
+	return providerDot + imageIndicator + textArea + hintStyle.Render(hints)
 }
 
 func (m *Model) updateViewport() {
 	var content strings.Builder
 
 	if len(m.messages) == 0 {
-		welcomeStyle := lipgloss.NewStyle().
+		welcome := lipgloss.NewStyle().
 			Foreground(theme.Overlay1).
-			Italic(true).
-			Width(m.contentWidth() - 4).
-			Padding(2, 4)
-
-		welcome := welcomeStyle.Render("Start a conversation with any AI model.\n\n" +
-			"Tips:\n" +
-			"  * Type a message to chat with @" + m.defaultProvider + "\n" +
-			"  * Use @claude, @gpt, @gemini, or @grok to pick a model\n" +
-			"  * Use @all to ask all connected models at once\n" +
-			"  * Ctrl+D opens the dashboard\n" +
-			"  * Ctrl+K opens the command palette")
+			Padding(2, 2).
+			Render("Ready to assist. @claude, @gpt, @gemini... or @all to compare.")
 		content.WriteString(welcome)
 	} else {
 		for i, msg := range m.messages {
@@ -192,7 +155,7 @@ func (m *Model) updateViewport() {
 }
 
 func (m Model) renderMessage(msg Message, index int) string {
-	availWidth := m.contentWidth() - 4
+	availWidth := m.contentWidth() - 2
 
 	switch msg.Role {
 	case "user":
@@ -207,50 +170,47 @@ func (m Model) renderMessage(msg Message, index int) string {
 }
 
 func (m Model) renderUserMessage(msg Message, availWidth int) string {
-	label := lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render("YOU")
-	if count := len(msg.Images) + len(msg.ImageData); count > 0 {
-		label += lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf(" [img:%d]", count))
-	}
-
+	prefix := theme.UserPrefixStyle.Render("YOU > ")
+	
 	content := lipgloss.NewStyle().
-		Foreground(theme.Text).
-		Width(availWidth - 2).
+		Width(availWidth - lipgloss.Width("YOU > ")).
 		Render(msg.Content)
 
-	return theme.UserBubbleStyle.Width(availWidth).Render(label + "\n" + content)
+	if count := len(msg.Images) + len(msg.ImageData); count > 0 {
+		prefix += lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf("[%d images] ", count))
+	}
+
+	return prefix + content
 }
 
 func (m Model) renderSystemMessage(msg Message, availWidth int) string {
 	return lipgloss.NewStyle().
 		Foreground(theme.Overlay0).
 		Italic(true).
-		Padding(0, 2).
 		Width(availWidth).
-		Render("— " + msg.Content)
+		Render("! " + msg.Content)
 }
 
 func (m Model) renderAssistantMessage(msg Message, index int, availWidth int, isExpanded bool, isStreamingLast bool) string {
 	providerColor := theme.ProviderColor(msg.Provider)
+	prefixText := strings.ToUpper(msg.Provider) + " > "
+	prefix := lipgloss.NewStyle().Foreground(providerColor).Bold(true).Render(prefixText)
 	
-	// Elegant header
-	name := strings.ToUpper(msg.Provider)
-	header := lipgloss.NewStyle().Foreground(providerColor).Bold(true).Render(core.IconModel + " " + name)
-	
-	innerWidth := availWidth - 2
-	var parts []string
-	parts = append(parts, header)
+	innerWidth := availWidth - lipgloss.Width(prefixText)
+	if innerWidth < 20 { innerWidth = 20 }
 
+	var parts []string
+
+	// Thinking
 	if msg.Thinking != "" {
 		if isExpanded || isStreamingLast {
-			thinkContent := theme.ThinkingStyle.Width(innerWidth).Render(msg.Thinking)
-			parts = append(parts, thinkContent)
+			parts = append(parts, theme.ThinkingStyle.Width(innerWidth).Render(msg.Thinking))
 		} else {
-			collapsed := lipgloss.NewStyle().Foreground(theme.Overlay1).PaddingLeft(2).Render("• Thinking...")
-			parts = append(parts, collapsed)
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.Overlay0).PaddingLeft(2).Render("... thinking"))
 		}
 	}
 
-	// Render blocks or fallback content
+	// Content blocks
 	if len(msg.Blocks) > 0 {
 		for _, block := range msg.Blocks {
 			switch block.Type {
@@ -269,17 +229,18 @@ func (m Model) renderAssistantMessage(msg Message, index int, availWidth int, is
 		parts = append(parts, renderMarkdown(msg.Content, innerWidth))
 	}
 
-	// Stats line
+	// Stats
 	if msg.InputTokens > 0 || msg.OutputTokens > 0 {
-		stats := fmt.Sprintf("%s/%s tokens", formatTokenCount(msg.InputTokens), formatTokenCount(msg.OutputTokens))
-		if cost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider); cost > 0 {
-			stats += fmt.Sprintf(" · $%.4f", cost)
-		}
-		parts = append(parts, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(stats))
+		stats := fmt.Sprintf("[%s/%s]", formatTokenCount(msg.InputTokens), formatTokenCount(msg.OutputTokens))
+		parts = append(parts, lipgloss.NewStyle().Foreground(theme.Surface1).Render(stats))
 	}
 
-	body := strings.Join(parts, "\n")
-	return lipgloss.NewStyle().PaddingLeft(1).Render(body)
+	body := strings.Join(parts, "\n\n")
+	// Indent the body relative to the prefix
+	indentedBody := lipgloss.NewStyle().PaddingLeft(lipgloss.Width(prefixText)).Render(body)
+	
+	// First line combines prefix and first part of body if possible, but simpler to just stack
+	return prefix + "\n" + indentedBody
 }
 
 func renderInlineToolCall(tc ToolCallData, width int) string {
@@ -294,10 +255,10 @@ func renderInlineToolCall(tc ToolCallData, width int) string {
 	})
 
 	style := lipgloss.NewStyle().
-		Padding(0, 1).
-		Width(width).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Surface1)
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(theme.Surface1).
+		PaddingLeft(1).
+		Width(width)
 
 	if status == tools.ToolStatusError {
 		style = style.BorderForeground(theme.Red)
