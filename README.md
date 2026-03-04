@@ -12,7 +12,7 @@ Route prompts to Claude, Gemini, GPT, Grok, Copilot, Ollama — or any OpenAI/An
 
 </div>
 
-> **BETA (v0.7.0)** — Poly is in active development. Expect breaking changes, rough edges, and missing features. [Open an issue](https://github.com/ruipedro-pinheiro/Poly/issues/new/choose) if something breaks.
+> **BETA (v0.7.1)** — Poly is in active development. Expect breaking changes, rough edges, and missing features. [Open an issue](https://github.com/ruipedro-pinheiro/Poly/issues/new/choose) if something breaks.
 
 ---
 
