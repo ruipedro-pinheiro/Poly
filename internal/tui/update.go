@@ -15,6 +15,7 @@ import (
 	"github.com/pedromelo/poly/internal/tools"
 	"github.com/pedromelo/poly/internal/tui/components/infopanel"
 	"github.com/pedromelo/poly/internal/tui/components/status"
+	"github.com/pedromelo/poly/internal/tui/core"
 	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 )
 
@@ -96,7 +97,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case DeviceFlowStartedMsg:
-		m.authStatusMsg = fmt.Sprintf("Code: %s  →  %s", msg.UserCode, msg.VerificationURI)
+		m.authStatusMsg = fmt.Sprintf("Code: %s  %s  %s", msg.UserCode, core.IconArrow, msg.VerificationURI)
 		return m, pollDeviceFlow(msg.Provider, msg.DeviceCode, msg.Interval)
 
 	case CompareResultMsg:
@@ -128,7 +129,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetHeight(m.layout.ChatHeight)
 		}
 
-		m.textarea.SetWidth(m.width - tuiLayout.InputBoxPadding)
+		taWidth := m.width - tuiLayout.InputBoxPadding - tuiLayout.InputPrefixSpace
+		if taWidth < 1 {
+			taWidth = 1
+		}
+		m.textarea.SetWidth(taWidth)
 		m.headerBar.SetSize(m.width, tuiLayout.HeaderHeight)
 		m.headerBar.SetProvider(m.defaultProvider, theme.ProviderColor(m.defaultProvider))
 		cwd, _ := os.Getwd()
@@ -181,6 +186,7 @@ func (m *Model) syncStatusBar() {
 		CacheRead:     m.sessionCacheReadTokens,
 		Cost:          m.sessionCost,
 	})
+	m.headerBar.SetThinkingMode(m.thinkingMode)
 	m.headerBar.SetTokens(m.sessionInputTokens, m.sessionOutputTokens, m.sessionCost)
 }
 

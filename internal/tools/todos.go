@@ -31,13 +31,13 @@ func (t *TodosTool) Parameters() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"todos": map[string]interface{}{
-				"type": "array",
+				"type":        "array",
 				"description": "New todo list (full replacement)",
 				"items": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"content":    map[string]interface{}{"type": "string", "description": "Task description (imperative)"},
-						"status":     map[string]interface{}{"type": "string", "enum": []string{"pending", "in_progress", "completed"}},
+						"content":     map[string]interface{}{"type": "string", "description": "Task description (imperative)"},
+						"status":      map[string]interface{}{"type": "string", "enum": []string{"pending", "in_progress", "completed"}},
 						"active_form": map[string]interface{}{"type": "string", "description": "Present continuous form for UI"},
 					},
 					"required": []string{"content", "status", "active_form"},
@@ -103,11 +103,11 @@ func (t *TodosTool) Execute(args map[string]interface{}) ToolResult {
 	var pretty strings.Builder
 	pretty.WriteString("Updated todos:\n")
 	for _, todo := range newTodos {
-		statusEmoji := "○"
+		statusEmoji := "-"
 		if todo.Status == "completed" {
 			statusEmoji = "✓"
 		} else if todo.Status == "in_progress" {
-			statusEmoji = "▶"
+			statusEmoji = ">"
 		}
 		pretty.WriteString(fmt.Sprintf("  %s %s (%s)\n", statusEmoji, todo.ActiveForm, todo.Status))
 	}

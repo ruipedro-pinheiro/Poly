@@ -146,23 +146,28 @@ type Model struct {
 // New creates a new TUI model
 func New() Model {
 	ta := textarea.New()
-	ta.Placeholder = "Type a message..."
+	ta.Placeholder = ""
 	ta.Focus()
 	ta.Prompt = ""
 	ta.CharLimit = 0
 	ta.ShowLineNumbers = false
 	ta.SetStyles(textarea.Styles{
 		Focused: textarea.StyleState{
-			Base:        lipgloss.NewStyle(),
+			Base:        lipgloss.NewStyle().Foreground(theme.Text),
 			CursorLine:  lipgloss.NewStyle(),
-			Placeholder: lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true),
-			Prompt:      lipgloss.NewStyle().Foreground(theme.Mauve),
+			Placeholder: lipgloss.NewStyle().Foreground(theme.Subtext0),
+			Prompt:      lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true),
 		},
 		Blurred: textarea.StyleState{
-			Base:        lipgloss.NewStyle(),
+			Base:        lipgloss.NewStyle().Foreground(theme.Subtext0),
 			CursorLine:  lipgloss.NewStyle(),
-			Placeholder: lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true),
+			Placeholder: lipgloss.NewStyle().Foreground(theme.Overlay1),
 			Prompt:      lipgloss.NewStyle().Foreground(theme.Overlay0),
+		},
+		Cursor: textarea.CursorStyle{
+			Color: theme.Mauve,
+			Shape: tea.CursorBar,
+			Blink: true,
 		},
 	})
 	ta.SetHeight(1)

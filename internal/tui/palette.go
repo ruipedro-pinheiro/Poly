@@ -20,12 +20,12 @@ func (m Model) renderCommandPalette() string {
 	// Filter input (bordered style)
 	filterDisplay := m.paletteFilter
 	if filterDisplay == "" {
-		filterDisplay = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render("Type to filter...")
+		filterDisplay = lipgloss.NewStyle().Foreground(theme.Overlay1).Italic(true).Render("Type to filter...")
 	}
 	filterBox := lipgloss.NewStyle().
 		Foreground(theme.Text).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(theme.Mauve).
+		BorderForeground(theme.Surface2).
 		Padding(0, 1).
 		Width(innerWidth - 2).
 		Render("> " + filterDisplay)
@@ -52,7 +52,7 @@ func (m Model) renderCommandPalette() string {
 	// Scroll indicator top
 	if startIdx > 0 {
 		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
-			Render("   ... "+strings.Repeat("^", 3)) + "\n")
+			Render("   ... more above ...") + "\n")
 	}
 
 	// Render commands
@@ -60,54 +60,38 @@ func (m Model) renderCommandPalette() string {
 		cmd := filtered[i]
 		isSelected := i == m.paletteIndex
 
-		var row strings.Builder
+		cursor := listCursor(isSelected)
 
-		// Selection cursor
-		if isSelected {
-			row.WriteString(lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render(" > "))
-		} else {
-			row.WriteString("   ")
+		nameWidth := innerWidth - 14
+		if nameWidth < 12 {
+			nameWidth = 12
 		}
+		namePart := lipgloss.NewStyle().
+			Foreground(theme.Text).
+			Width(nameWidth).
+			Render("/" + cmd.Name)
 
-		// Command name
-		nameStyle := lipgloss.NewStyle().Foreground(theme.Text)
-		row.WriteString(nameStyle.Width(20).Render("/" + cmd.Name))
+		category := cmd.Category
+		catPart := lipgloss.NewStyle().
+			Foreground(theme.Overlay1).
+			Width(10).
+			AlignHorizontal(lipgloss.Right).
+			Render(category)
 
-		// Category (right side)
-		if cmd.Category != "" {
-			catStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-			row.WriteString(catStyle.Render(cmd.Category))
-		}
-
-		// Row style: selected gets left border accent
-		rowStr := row.String()
-		if isSelected {
-			rowStr = lipgloss.NewStyle().
-				BorderStyle(lipgloss.ThickBorder()).
-				BorderLeft(true).
-				BorderRight(false).
-				BorderTop(false).
-				BorderBottom(false).
-				BorderForeground(theme.Mauve).
-				Width(innerWidth).
-				Render(rowStr)
-		}
-
-		content.WriteString(rowStr + "\n")
+		rowStr := cursor + namePart + " " + catPart
+		content.WriteString(renderListRow(innerWidth, rowStr, isSelected) + "\n")
 	}
 
 	// Scroll indicator bottom
 	if endIdx < len(filtered) {
 		content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).
-			Render("   ... "+strings.Repeat("v", 3)) + "\n")
+			Render("   ... more below ...") + "\n")
 	}
 
 	content.WriteString("\n")
-	hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-	content.WriteString(hintKey.Render("↑↓") + hintDesc.Render(" choose · "))
-	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" confirm · "))
-	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" close"))
+	content.WriteString(renderDialogHints(innerWidth,
+		"↑↓ navigate · Enter confirm · Esc close",
+	))
 
 	return m.renderDialogFrame("Commands", content.String(), 46)
 }

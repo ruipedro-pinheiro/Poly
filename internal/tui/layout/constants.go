@@ -11,7 +11,7 @@ const (
 	MinTermHeight = 15
 
 	// Vertical zones (heights in rows)
-	HeaderHeight    = 1
+	HeaderHeight    = 2
 	StatusHeight    = 1
 	InputHeight     = 4 // editor box + hints line (1-line textarea default)
 	EditorMinHeight = 3
@@ -32,6 +32,7 @@ const (
 	ChatAreaPadding  = 4 // total horizontal padding for chat viewport
 	InputBoxPadding  = 8 // total horizontal padding for input textarea
 	InputWidthOffset = 4 // total horizontal offset for input box border
+	InputPrefixSpace = 2 // reserve for provider dot before textarea content
 	BorderWidth      = 1 // standard border thickness
 
 	// Tool rendering

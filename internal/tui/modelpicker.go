@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/pedromelo/poly/internal/theme"
+	"github.com/pedromelo/poly/internal/tui/core"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -28,7 +29,7 @@ func (m Model) renderModelPicker() string {
 		filterBox := lipgloss.NewStyle().
 			Foreground(theme.Text).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(theme.Mauve).
+			BorderForeground(theme.Surface2).
 			Padding(0, 1).
 			Width(innerWidth - 2).
 			Render("> " + m.modelPickerFilter)
@@ -71,12 +72,9 @@ func (m Model) renderModelPicker() string {
 	}
 
 	content.WriteString("\n")
-	hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-	content.WriteString(hintKey.Render("↑↓") + hintDesc.Render(" select · "))
-	content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" confirm · "))
-	content.WriteString(hintKey.Render("type") + hintDesc.Render(" filter · "))
-	content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
+	content.WriteString(renderDialogHints(innerWidth,
+		"↑↓ navigate · Enter confirm · type filter · Esc cancel",
+	))
 
 	dialog := dialogStyle(w).Render(content.String())
 	return placeDialog(dialog, m.width, m.height)
@@ -89,11 +87,8 @@ func (m Model) renderModelRow(model modelOption, index int, isCurrent bool, inne
 	var row strings.Builder
 
 	// Selection cursor
-	if isSelected {
-		row.WriteString(lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render(" > "))
-	} else {
-		row.WriteString("   ")
-	}
+	cursor := listCursor(isSelected)
+	row.WriteString(cursor)
 
 	// Model name (variant part)
 	nameStyle := lipgloss.NewStyle().Foreground(theme.Text)
@@ -103,6 +98,7 @@ func (m Model) renderModelRow(model modelOption, index int, isCurrent bool, inne
 	} else {
 		displayName = model.display
 	}
+	displayName = truncateToWidth(displayName, innerWidth-16)
 
 	// Provider badge
 	providerBadge := lipgloss.NewStyle().
@@ -112,27 +108,19 @@ func (m Model) renderModelRow(model modelOption, index int, isCurrent bool, inne
 	// Current model marker
 	currentMark := ""
 	if isCurrent {
-		currentMark = lipgloss.NewStyle().Foreground(theme.Green).Render(" ●")
+		currentMark = lipgloss.NewStyle().Foreground(theme.Green).Render(" " + core.IconCheck)
 	}
 
-	nameWidth := 28
-	row.WriteString(nameStyle.Width(nameWidth).Render(displayName) + providerBadge + currentMark)
+	nameWidth := innerWidth - 16
+	if nameWidth < 14 {
+		nameWidth = 14
+	}
+	row.WriteString(nameStyle.Width(nameWidth).Render(displayName))
+	row.WriteString(" ")
+	row.WriteString(lipgloss.NewStyle().Width(10).AlignHorizontal(lipgloss.Right).Render(providerBadge + currentMark))
 
 	// Row style: selected gets left border accent
-	rowStr := row.String()
-	if isSelected {
-		rowStr = lipgloss.NewStyle().
-			BorderStyle(lipgloss.ThickBorder()).
-			BorderLeft(true).
-			BorderRight(false).
-			BorderTop(false).
-			BorderBottom(false).
-			BorderForeground(theme.Mauve).
-			Width(innerWidth).
-			Render(rowStr)
-	}
-
-	return rowStr + "\n"
+	return renderListRow(innerWidth, row.String(), isSelected) + "\n"
 }
 
 // filteredModelPickerModels returns models matching the current filter

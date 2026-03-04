@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -641,16 +643,36 @@ func (m *Model) handleSkillCommand(args []string) {
 
 // parseProvider extracts the target provider from a message
 func (m Model) parseProvider(content string) string {
-	content = strings.ToLower(content)
-	if strings.Contains(content, "@all") {
-		return "all"
+	mentions := regexp.MustCompile(`(?i)@([a-z0-9_-]+)`).FindAllStringSubmatch(content, -1)
+	if len(mentions) == 0 {
+		return m.defaultProvider
 	}
-	// Check all configured providers dynamically
-	for _, name := range config.GetProviderNames() {
-		if strings.Contains(content, "@"+name) {
-			return name
+
+	names := config.GetProviderNames()
+	known := make(map[string]string, len(names))
+	for _, name := range names {
+		known[strings.ToLower(name)] = name
+	}
+
+	// Prefer more specific provider IDs first when overlaps exist (e.g., gpt vs gptx).
+	sortedKeys := make([]string, 0, len(known))
+	for k := range known {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Slice(sortedKeys, func(i, j int) bool { return len(sortedKeys[i]) > len(sortedKeys[j]) })
+
+	for _, m := range mentions {
+		tag := strings.ToLower(m[1])
+		if tag == "all" {
+			return "all"
+		}
+		for _, key := range sortedKeys {
+			if tag == key {
+				return known[key]
+			}
 		}
 	}
+
 	return m.defaultProvider
 }
 

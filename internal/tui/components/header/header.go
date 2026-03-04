@@ -12,6 +12,13 @@ import (
 	"github.com/pedromelo/poly/internal/tui/layout"
 )
 
+const (
+	headerCompactWidth = 82
+	headerFullWidth    = 104
+	headerProviderMax  = 14
+	headerMinCwdWidth  = 8
+)
+
 // Header is the interface for the header bar component
 type Header interface {
 	layout.Model
@@ -56,19 +63,21 @@ func (h *headerCmp) View() string {
 
 	sep := lipgloss.NewStyle().Foreground(theme.Surface2).Render(" │ ")
 
-	// Logo
-	logo := core.GradientText(core.IconModel+" POLY", theme.Mauve, theme.Lavender, true)
-
-	// Provider name with truncation (max 12 chars → 10 + "..")
-	provDisplay := h.provider
-	if len(provDisplay) > 12 {
-		provDisplay = provDisplay[:10] + ".."
+	logo := core.GradientText("POLY", theme.Mauve, theme.Lavender, true)
+	provider := h.provider
+	if provider == "" {
+		provider = "none"
 	}
-	provDot := lipgloss.NewStyle().Foreground(h.providerColor).Render("●")
-	provName := lipgloss.NewStyle().Foreground(h.providerColor).Bold(true).Render(provDisplay)
-	provRendered := provDot + " " + provName
+	provColor := h.providerColor
+	if provColor == nil {
+		provColor = theme.Overlay1
+	}
+	providerChip := lipgloss.NewStyle().
+		Foreground(provColor).
+		Bold(true).
+		Render("@" + truncateRight(provider, headerProviderMax))
+	modeChip := h.renderModeLabel()
 
-	// Context %
 	pctStr, pctVal := h.contextPercent()
 	var pctColor color.Color
 	switch {
@@ -80,28 +89,34 @@ func (h *headerCmp) View() string {
 		pctColor = theme.Green
 	}
 	pctRendered := lipgloss.NewStyle().Foreground(pctColor).Render(pctStr)
+	costRendered := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(fmt.Sprintf("$%.2f", h.cost))
 
-	// Responsive: adapt content to terminal width
 	var line string
-	if h.width < 60 {
-		// Minimal: logo + provider only
-		line = logo + sep + provRendered
-	} else if h.width < 80 {
-		// Compact: logo + provider + context%
-		line = logo + sep + provRendered + sep + pctRendered
+	if h.width < headerCompactWidth {
+		line = logo
+	} else if h.width < headerFullWidth {
+		left := logo + sep + providerChip + sep + modeChip
+		if h.inputTokens+h.outputTokens > 0 || h.cost > 0 {
+			left += sep + pctRendered + sep + costRendered
+		}
+		line = left
 	} else {
-		// Full: logo + provider + context% + cwd
-		left := logo + sep + provRendered + sep + pctRendered
-		leftWidth := lipgloss.Width(core.IconModel+" POLY") + 3 + lipgloss.Width("● "+provDisplay) + 3 + lipgloss.Width(pctStr)
+		left := logo + sep + providerChip + sep + modeChip
+		if h.inputTokens+h.outputTokens > 0 || h.cost > 0 {
+			left += sep + pctRendered + sep + costRendered
+		}
+		leftWidth := lipgloss.Width(left)
 
 		cwdRendered := ""
-		cwdWidth := 0
 		if h.cwd != "" {
-			cwdRendered = lipgloss.NewStyle().Foreground(theme.Overlay0).Render(h.cwd)
-			cwdWidth = lipgloss.Width(h.cwd)
+			avail := h.width - leftWidth - 3
+			if avail > headerMinCwdWidth {
+				cwd := truncateLeft(h.cwd, avail)
+				cwdRendered = lipgloss.NewStyle().Foreground(theme.Overlay0).Render(cwd)
+			}
 		}
 
-		gap := h.width - leftWidth - cwdWidth - 4
+		gap := h.width - leftWidth - lipgloss.Width(cwdRendered) - 2
 		if gap < 1 {
 			gap = 1
 		}
@@ -110,8 +125,25 @@ func (h *headerCmp) View() string {
 
 	return lipgloss.NewStyle().
 		Width(h.width).
+		Background(theme.Mantle).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(theme.Surface2).
 		Padding(0, 1).
 		Render(line)
+}
+
+func (h *headerCmp) renderModeLabel() string {
+	mode := "FAST"
+	clr := theme.Teal
+	if h.thinkingMode {
+		mode = "THINK"
+		clr = theme.Lavender
+	}
+	return lipgloss.NewStyle().
+		Foreground(clr).
+		Bold(true).
+		Render(mode)
 }
 
 // contextPercent returns a formatted string and the numeric value
@@ -130,6 +162,46 @@ func (h *headerCmp) contextPercent() (string, int) {
 	}
 	intPct := int(pct)
 	return fmt.Sprintf("%d%%", intPct), intPct
+}
+
+func truncateLeft(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	if max <= 3 {
+		return strings.Repeat(".", max)
+	}
+	runes := []rune(s)
+	for i := len(runes) - 1; i >= 0; i-- {
+		candidate := "..." + string(runes[i:])
+		if lipgloss.Width(candidate) <= max {
+			return candidate
+		}
+	}
+	return "..."
+}
+
+func truncateRight(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	if max <= 2 {
+		return strings.Repeat(".", max)
+	}
+	runes := []rune(s)
+	for i := len(runes); i >= 0; i-- {
+		candidate := string(runes[:i]) + ".."
+		if lipgloss.Width(candidate) <= max {
+			return candidate
+		}
+	}
+	return strings.Repeat(".", max)
 }
 
 func (h *headerCmp) SetSize(width, height int) tea.Cmd {

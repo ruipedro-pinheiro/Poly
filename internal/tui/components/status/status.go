@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/pedromelo/poly/internal/theme"
+	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/layout"
 )
 
@@ -107,12 +108,15 @@ func (s *statusCmp) Update(msg tea.Msg) (layout.Model, tea.Cmd) {
 }
 
 func (s *statusCmp) View() string {
-	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	if s.width <= 0 {
+		return ""
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Overlay1)
 	sepStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	sep := sepStyle.Render(" · ")
 
-	// LEFT: Streaming info
-	leftParts := ""
+	leftPrimary := ""
 	if s.streaming {
 		secs := s.streamElapsed.Seconds()
 		tokPerSec := 0.0
@@ -120,7 +124,7 @@ func (s *statusCmp) View() string {
 			tokPerSec = float64(s.streamTokens) / secs
 		}
 		streamStyle := lipgloss.NewStyle().Foreground(theme.Mauve)
-		leftParts = streamStyle.Render(fmt.Sprintf("⟳ %.1fs", secs)) +
+		leftPrimary = streamStyle.Render(fmt.Sprintf("%s %.1fs", core.IconLoading, secs)) +
 			sep +
 			streamStyle.Render(fmt.Sprintf("%.0f tok/s", tokPerSec))
 	} else if s.streamDoneTokens > 0 {
@@ -130,53 +134,66 @@ func (s *statusCmp) View() string {
 			tokPerSec = float64(s.streamDoneTokens) / secs
 		}
 		doneStyle := lipgloss.NewStyle().Foreground(theme.Green)
-		leftParts = doneStyle.Render(fmt.Sprintf("✓ %.1fs", secs)) +
+		leftPrimary = doneStyle.Render(fmt.Sprintf("%s %.1fs", core.IconDone, secs)) +
 			sep +
 			doneStyle.Render(fmt.Sprintf("%.0f tok/s", tokPerSec))
 	}
 
-	// CENTER: Tokens + cost
-	centerParts := ""
+	usage := ""
 	if s.inputTokens+s.outputTokens > 0 {
-		tokenStr := dimStyle.Render(fmt.Sprintf("%s↑ %s↓",
+		tokenStr := dimStyle.Render(fmt.Sprintf("%s in  %s out",
 			formatTokens(s.inputTokens), formatTokens(s.outputTokens)))
 		costStr := lipgloss.NewStyle().Foreground(theme.Subtext0).
-			Render(fmt.Sprintf("$%.2f", s.cost))
-		centerParts = tokenStr + sep + costStr
+			Render(fmt.Sprintf("$%.3f", s.cost))
+		usage = tokenStr + sep + costStr
 		if s.cacheRead > 0 {
 			cacheStr := lipgloss.NewStyle().Foreground(theme.Surface2).
 				Render(fmt.Sprintf("(%s cached)", formatTokens(s.cacheRead)))
-			centerParts += " " + cacheStr
+			usage += " " + cacheStr
 		}
 	}
 
-	// RIGHT: Status badge + provider
-	statusBadge := ""
+	stateLabel := ""
 	if s.info != nil {
 		badge := s.renderBadge(s.info.Type)
 		msgStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-		statusBadge = badge + " " + msgStyle.Render(s.info.Msg)
+		msg := strings.ReplaceAll(s.info.Msg, "\n", " ")
+		maxMsgWidth := s.width / 3
+		if maxMsgWidth < 18 {
+			maxMsgWidth = 18
+		}
+		msg = truncateToWidth(msg, maxMsgWidth)
+		stateLabel = badge + " " + msgStyle.Render(msg)
 	} else if s.streaming {
-		statusBadge = lipgloss.NewStyle().Foreground(theme.Mauve).
-			Render("⟳ Streaming")
+		stateLabel = lipgloss.NewStyle().Foreground(theme.Mauve).
+			Render(core.IconLoading + " Streaming")
 	} else {
-		statusBadge = lipgloss.NewStyle().Foreground(theme.Green).
-			Render("✓ Ready")
+		stateLabel = lipgloss.NewStyle().Foreground(theme.Green).
+			Render(core.IconDone + " Ready")
 	}
 
-	// Assemble: left ... center ... status
-	right := statusBadge
+	right := stateLabel
 
-	// Build the full line
-	var parts []string
-	if leftParts != "" {
-		parts = append(parts, leftParts)
-	}
-	if centerParts != "" {
-		parts = append(parts, centerParts)
+	left := ""
+	if leftPrimary != "" && usage != "" {
+		left = leftPrimary + sep + usage
+	} else if leftPrimary != "" {
+		left = leftPrimary
+	} else if usage != "" {
+		left = usage
 	}
 
-	left := strings.Join(parts, "     ")
+	available := s.width - lipgloss.Width(right) - 4
+	if left != "" && available < lipgloss.Width(left) {
+		switch {
+		case leftPrimary != "" && lipgloss.Width(leftPrimary) <= available:
+			left = leftPrimary
+		case usage != "" && lipgloss.Width(usage) <= available:
+			left = usage
+		default:
+			left = ""
+		}
+	}
 
 	gap := s.width - lipgloss.Width(left) - lipgloss.Width(right) - 4
 	if gap < 0 {
@@ -187,6 +204,9 @@ func (s *statusCmp) View() string {
 
 	return lipgloss.NewStyle().
 		Background(theme.Mantle).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(theme.Surface2).
 		Width(s.width).
 		Padding(0, 1).
 		Render(line)
@@ -253,4 +273,24 @@ func formatTokens(n int) string {
 		return fmt.Sprintf("%.1fK", float64(n)/1000)
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+func truncateToWidth(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	if max <= 2 {
+		return strings.Repeat(".", max)
+	}
+	runes := []rune(s)
+	for i := len(runes); i >= 0; i-- {
+		candidate := string(runes[:i]) + ".."
+		if lipgloss.Width(candidate) <= max {
+			return candidate
+		}
+	}
+	return strings.Repeat(".", max)
 }

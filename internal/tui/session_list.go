@@ -15,10 +15,6 @@ import (
 func (m Model) renderSessionList() string {
 	w := dialogWidth(70, m.width, 40)
 
-	selectedStyle := lipgloss.NewStyle().
-		Foreground(theme.Text).
-		Bold(true)
-
 	normalStyle := lipgloss.NewStyle().
 		Foreground(theme.Overlay1)
 
@@ -39,7 +35,7 @@ func (m Model) renderSessionList() string {
 		filterBox := lipgloss.NewStyle().
 			Foreground(theme.Text).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(theme.Mauve).
+			BorderForeground(theme.Surface2).
 			Padding(0, 1).
 			Width(w - 12).
 			Render("/ " + filterDisplay)
@@ -79,11 +75,8 @@ func (m Model) renderSessionList() string {
 
 		for i := startIdx; i < endIdx; i++ {
 			s := sessions[i]
-			// Selection indicator
-			prefix := "  "
-			if i == m.sessionListIndex {
-				prefix = "> "
-			}
+			isSelected := i == m.sessionListIndex
+			cursor := listCursor(isSelected)
 
 			// Current session marker
 			marker := " "
@@ -100,9 +93,7 @@ func (m Model) renderSessionList() string {
 			if maxTitle < 10 {
 				maxTitle = 10
 			}
-			if len(title) > maxTitle {
-				title = title[:maxTitle-3] + "..."
-			}
+			title = truncateToWidth(title, maxTitle)
 
 			// Provider
 			prov := providerStyle.Render("@" + s.Provider)
@@ -115,11 +106,18 @@ func (m Model) renderSessionList() string {
 
 			// Render line
 			var line string
-			if i == m.sessionListIndex {
-				line = selectedStyle.Render(prefix+marker+" "+title) + "  " + prov + "  " + msgs + "  " + dimStyle.Render(ago)
-			} else {
-				line = normalStyle.Render(prefix+marker+" "+title) + "  " + prov + "  " + msgs + "  " + dimStyle.Render(ago)
+			leftWidth := w - 34
+			if leftWidth < 16 {
+				leftWidth = 16
 			}
+			leftPart := truncateToWidth(marker+" "+title, leftWidth)
+			leftRendered := lipgloss.NewStyle().Width(leftWidth).Render(leftPart)
+			rightPart := prov + "  " + msgs + "  " + dimStyle.Render(ago)
+			line = cursor + leftRendered + " " + rightPart
+			if !isSelected {
+				line = normalStyle.Render(line)
+			}
+			line = renderListRow(w-8, line, isSelected)
 
 			content.WriteString(line + "\n")
 		}
@@ -133,18 +131,9 @@ func (m Model) renderSessionList() string {
 
 	content.WriteString("\n")
 
-	// Footer with keybindings
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-
-	content.WriteString(
-		keyStyle.Render("enter") + descStyle.Render(" open  ") +
-			keyStyle.Render("n") + descStyle.Render(" new  ") +
-			keyStyle.Render("d") + descStyle.Render(" delete  ") +
-			keyStyle.Render("f") + descStyle.Render(" fork  ") +
-			keyStyle.Render("/") + descStyle.Render(" filter  ") +
-			keyStyle.Render("esc") + descStyle.Render(" close"),
-	)
+	content.WriteString(renderDialogHints(w-8,
+		"Enter open · n new · d delete · f fork · / filter · Esc close",
+	))
 
 	return m.renderDialogFrame("Sessions", content.String(), 70)
 }

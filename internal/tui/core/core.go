@@ -32,7 +32,7 @@ func Section(title string, width int, titleColor, sepColor color.Color) string {
 	return rendered + sep
 }
 
-// Title renders a title with diagonal fill: "Title ╱╱╱╱╱╱╱╱╱"
+// Title renders a dialog title padded to width.
 func Title(title string, width int, titleColor, diagColor color.Color) string {
 	if width <= 0 {
 		return ""
@@ -42,19 +42,9 @@ func Title(title string, width int, titleColor, diagColor color.Color) string {
 		Foreground(titleColor).
 		Bold(true)
 
-	rendered := titleStyle.Render(title)
-	titleWidth := lipgloss.Width(rendered)
-
-	diagLen := width - titleWidth - 1
-	if diagLen < 3 {
-		diagLen = 3
-	}
-
-	diag := lipgloss.NewStyle().
-		Foreground(diagColor).
-		Render(" " + strings.Repeat(IconDiag, diagLen))
-
-	return rendered + diag
+	return lipgloss.NewStyle().
+		Width(width).
+		Render(titleStyle.Render(title))
 }
 
 // CenteredSection renders a centered section header: "─── Title ───"
@@ -85,7 +75,7 @@ func CenteredSection(title string, width int, titleColor, sepColor color.Color) 
 		sepStyle.Render(strings.Repeat(IconSep, rightSep))
 }
 
-// StatusLine renders "● Title  description"
+// StatusLine renders "icon Title  description"
 func StatusLine(icon, title, description string, iconColor, titleColor, descColor color.Color) string {
 	iconStyle := lipgloss.NewStyle().Foreground(iconColor)
 	titleStyle := lipgloss.NewStyle().Foreground(titleColor).Bold(true)

@@ -94,7 +94,8 @@ func (m Model) renderApproval() string {
 
 	dialog := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
+		BorderForeground(theme.Surface2).
+		Background(theme.Mantle).
 		Padding(1, 2).
 		Width(width).
 		Render(body)
@@ -114,6 +115,8 @@ func (m Model) renderApprovalContent(width int) string {
 	codeStyle := lipgloss.NewStyle().
 		Foreground(theme.Text).
 		Background(theme.Surface0).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(theme.Surface2).
 		Padding(0, 1).
 		Width(width)
 
@@ -222,7 +225,7 @@ func renderButton(text string, underlineIdx int, selected bool) string {
 		bg = theme.Mauve
 	} else {
 		fg = theme.Text
-		bg = theme.Surface1
+		bg = theme.Surface0
 	}
 
 	// Inline styles for text parts (NO padding here)

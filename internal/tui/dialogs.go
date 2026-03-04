@@ -35,7 +35,7 @@ func (m Model) renderDialogFrame(title string, content string, preferredWidth in
 	if len(lines) > maxContentLines {
 		lines = lines[:maxContentLines-1]
 		scrollHint := lipgloss.NewStyle().
-			Foreground(theme.Overlay0).
+			Foreground(theme.Overlay1).
 			Italic(true).
 			Render("  ... more below ...")
 		lines = append(lines, scrollHint)
@@ -50,7 +50,8 @@ func (m Model) renderDialogFrame(title string, content string, preferredWidth in
 func dialogStyle(width int) lipgloss.Style {
 	return lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
+		BorderForeground(theme.Surface2).
+		Background(theme.Mantle).
 		Padding(1, 2).
 		Width(width)
 }
@@ -189,6 +190,16 @@ func (m Model) renderControlRoom() string {
 	innerWidth := w - 6
 
 	var content strings.Builder
+	content.WriteString(
+		lipgloss.NewStyle().
+			Foreground(theme.Overlay0).
+			Render("  provider      auth        default") + "\n",
+	)
+	content.WriteString(
+		lipgloss.NewStyle().
+			Foreground(theme.Surface1).
+			Render("  "+strings.Repeat("─", max(6, innerWidth-2))) + "\n",
+	)
 
 	for i, providerName := range m.controlRoomProviders {
 		isSelected := i == m.controlRoomIndex
@@ -211,24 +222,18 @@ func (m Model) renderControlRoom() string {
 		}
 
 		var row strings.Builder
+		cursor := listCursor(isSelected)
+		row.WriteString(cursor)
 
-		// Selection cursor
-		if isSelected {
-			row.WriteString(lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render(" > "))
-		} else {
-			row.WriteString("   ")
-		}
-
-		// Icon + Name
+		// Name
 		provColor := theme.ProviderColor(providerName)
-		iconStyle := lipgloss.NewStyle().Foreground(provColor)
 		nameStyle := lipgloss.NewStyle().
 			Foreground(provColor).
 			Bold(true)
-		row.WriteString(iconStyle.Render(">>") + " ")
-		row.WriteString(nameStyle.Width(8).Render(providerName))
+		row.WriteString(nameStyle.Width(12).Render(truncateToWidth(providerName, 12)))
 
 		// Status badge
+		statusColWidth := 10
 		if isConnected {
 			connAuthInfo := storage.GetAuth(providerName)
 			connLabel := authLabel
@@ -236,37 +241,25 @@ func (m Model) renderControlRoom() string {
 				connLabel = "OAuth"
 			}
 			badge := lipgloss.NewStyle().
-				Foreground(theme.Base).
-				Background(theme.Green).
-				Padding(0, 1).
+				Foreground(theme.Green).
+				Bold(true).
+				Width(statusColWidth).
 				Render(connLabel)
 			row.WriteString(" " + badge)
 		} else {
-			badge := lipgloss.NewStyle().
+			statusText := lipgloss.NewStyle().
 				Foreground(theme.Overlay0).
+				Width(statusColWidth).
 				Render("- " + authLabel)
-			row.WriteString(" " + badge)
+			row.WriteString(" " + statusText)
 		}
 
 		// Default star
 		if isDefault {
-			row.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render("  *"))
+			row.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render("   *"))
 		}
 
-		// Row style: selected gets a subtle left accent
-		rowStr := row.String()
-		if isSelected {
-			rowStr = lipgloss.NewStyle().
-				BorderStyle(lipgloss.ThickBorder()).
-				BorderLeft(true).
-				BorderRight(false).
-				BorderTop(false).
-				BorderBottom(false).
-				BorderForeground(theme.Mauve).
-				Width(innerWidth).
-				Render(rowStr)
-		}
-		content.WriteString(rowStr + "\n")
+		content.WriteString(renderListRow(innerWidth, row.String(), isSelected) + "\n")
 	}
 
 	content.WriteString("\n")
@@ -298,9 +291,7 @@ func (m Model) renderControlRoom() string {
 			}
 
 			content.WriteString("\n")
-			hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-			hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-			content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
+			content.WriteString(renderDialogHints(innerWidth, "Esc cancel"))
 		} else {
 			// Standard OAuth code paste or API key input
 			var label, placeholder string
@@ -342,26 +333,19 @@ func (m Model) renderControlRoom() string {
 			inputBox := lipgloss.NewStyle().
 				Foreground(theme.Text).
 				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(theme.Surface2).
+				BorderForeground(theme.Mauve).
+				Background(theme.Surface0).
 				Padding(0, 1).
 				Width(innerWidth - 2).
 				Render(inputContent)
 
 			content.WriteString(inputBox + "\n\n")
-			hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-			hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-			content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" submit · "))
-			content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
+			content.WriteString(renderDialogHints(innerWidth, "Enter submit · Esc cancel"))
 		}
 	} else {
-		hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-		hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-
-		content.WriteString(hintKey.Render("↑↓") + hintDesc.Render(" navigate · "))
-		content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" connect · "))
-		content.WriteString(hintKey.Render("Del") + hintDesc.Render(" disconnect\n"))
-		content.WriteString(hintKey.Render("n") + hintDesc.Render(" add provider · "))
-		content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" close"))
+		line1 := "↑↓ navigate · Enter connect · Del disconnect"
+		line2 := "n add provider · Esc close"
+		content.WriteString(renderDialogHints(innerWidth, line1, line2))
 	}
 
 	return m.renderDialogFrame("Control Room", content.String(), 52)
