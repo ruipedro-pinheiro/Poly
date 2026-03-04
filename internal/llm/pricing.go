@@ -27,11 +27,14 @@ var pricingTable = map[string]ModelPricing{
 	"claude-haiku-4":  {0.80, 4.0},
 
 	// OpenAI
+	"gpt-4o":       {2.50, 10.0},
+	"gpt-4o-mini":  {0.15, 0.60},
 	"gpt-4.1":      {2.0, 8.0},
 	"gpt-4.1-mini": {0.40, 1.60},
 	"gpt-4.1-nano": {0.10, 0.40},
 	"o3":           {10.0, 40.0},
 	"o3-pro":       {20.0, 80.0},
+	"o3-mini":      {1.10, 4.40},
 	"o4-mini":      {1.10, 4.40},
 
 	// Google

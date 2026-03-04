@@ -236,7 +236,10 @@ func (m *Model) sendTableRonde(content string) tea.Cmd {
 	models := make([]string, 0, len(configuredProviders))
 	for _, name := range configuredProviders {
 		if p, ok := m.providers[name]; ok {
-			models = append(models, p.GetModel())
+			// Skip CostTier 0 providers (Copilot, Ollama) from cost estimate — they're free
+			if llm.GetProviderCostTier(name) > 0 {
+				models = append(models, p.GetModel())
+			}
 		}
 	}
 

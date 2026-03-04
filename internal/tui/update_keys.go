@@ -569,6 +569,10 @@ func (m Model) handleControlRoomEnter() (tea.Model, tea.Cmd) {
 			m.apiKeyPending = provider
 			m.authInput = ""
 			m.status = "Enter API key for " + provCfg.Name
+		case "none":
+			// Local providers (e.g. Ollama) need no authentication — just set as default
+			m.defaultProvider = provider
+			m.status = provider + " set as default (no auth needed)"
 		default:
 			m.apiKeyPending = provider
 			m.authInput = ""
