@@ -1,21 +1,11 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
-	"os/exec"
-	"runtime"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/pedromelo/poly/internal/config"
-	"github.com/pedromelo/poly/internal/security"
 )
 
 const (
@@ -25,248 +15,71 @@ const (
 	AnthropicAuthURLConsole = "https://console.anthropic.com/oauth/authorize"
 )
 
-// OAuthTokens holds the OAuth tokens
-type OAuthTokens struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
-}
-
-// pendingAuth stores the pending PKCE verifier and state
-type pendingAuth struct {
-	Verifier string
-	State    string
-}
-
-var (
-	pendingOAuth   *pendingAuth
-	pendingOAuthMu sync.Mutex
-)
-
-// StartAnthropicOAuth starts the OAuth flow and opens the browser
-// Returns the auth URL for display if browser can't be opened
-func StartAnthropicOAuth(mode string) (string, error) {
-	pkce, err := GeneratePKCE()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate PKCE: %w", err)
-	}
-
-	state, err := generateRandomString(32)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate state: %w", err)
-	}
-
-	pendingOAuthMu.Lock()
-	pendingOAuth = &pendingAuth{
-		Verifier: pkce.Verifier,
-		State:    state,
-	}
-	pendingOAuthMu.Unlock()
-
+func getAnthropicConfig(mode string) OAuthConfig {
 	baseURL := AnthropicAuthURLMax
 	if mode == "console" {
 		baseURL = AnthropicAuthURLConsole
 	}
 
-	params := url.Values{
-		"client_id":             {config.Get().Providers["claude"].OAuthClientID},
-		"response_type":         {"code"},
-		"redirect_uri":          {AnthropicRedirectURI},
-		"scope":                 {"org:create_api_key user:profile user:inference"},
-		"code_challenge":        {pkce.Challenge},
-		"code_challenge_method": {"S256"},
-		"state":                 {state},
-		"code":                  {"true"},
+	return OAuthConfig{
+		ClientID:     config.Get().Providers["claude"].OAuthClientID,
+		AuthorizeURL: baseURL,
+		TokenURL:     AnthropicTokenURL,
+		RedirectURI:  AnthropicRedirectURI,
+		Scopes:       "org:create_api_key user:profile user:inference",
+		ExtraParams: map[string]string{
+			"code": "true",
+		},
 	}
+}
 
-	authURL := baseURL + "?" + params.Encode()
-
-	// Try to open browser
-	_ = openBrowser(authURL)
-
-	return authURL, nil
+// StartAnthropicOAuth starts the OAuth flow for Anthropic (manual mode)
+func StartAnthropicOAuth(mode string) (string, error) {
+	_, authURL, err := StartOAuthFlow(getAnthropicConfig(mode), 0)
+	return authURL, err
 }
 
 // ExchangeAnthropicCode exchanges the authorization code for tokens.
 // Accepts: full callback URL (?code=...&state=...), raw "CODE#STATE", or raw code.
 func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
-	pendingOAuthMu.Lock()
-	pending := pendingOAuth
-	pendingOAuthMu.Unlock()
-
-	if pending == nil {
+	verifier, _ := GetPendingAuth()
+	if verifier == "" {
 		return nil, fmt.Errorf("no pending OAuth flow. Start OAuth first")
 	}
 
 	input = strings.TrimSpace(input)
-	var code, state string
+	var code string
 
 	if strings.HasPrefix(input, "http") {
-		// Full callback URL: extract code and state from query params
 		parsedURL, err := url.Parse(input)
 		if err != nil {
 			return nil, fmt.Errorf("invalid callback URL: %w", err)
 		}
 		q := parsedURL.Query()
 		code = q.Get("code")
-		state = q.Get("state")
 		if code == "" {
 			return nil, fmt.Errorf("authorization code not found in callback URL")
 		}
 	} else if strings.Contains(input, "#") {
-		// Anthropic callback page displays "CODE#STATE" — split it
 		parts := strings.SplitN(input, "#", 2)
 		code = parts[0]
-		state = parts[1]
 	} else {
-		// Raw code only
 		code = input
-		state = pending.State
 	}
 
 	if code == "" {
 		return nil, fmt.Errorf("no authorization code provided")
 	}
 
-	// Build form-encoded request body (OAuth 2.0 standard)
-	form := url.Values{
-		"grant_type":    {"authorization_code"},
-		"client_id":     {config.Get().Providers["claude"].OAuthClientID},
-		"code":          {code},
-		"state":         {state},
-		"redirect_uri":  {AnthropicRedirectURI},
-		"code_verifier": {pending.Verifier},
+	tokens, err := ExchangeCode(getAnthropicConfig(""), code, verifier)
+	if err == nil {
+		ClearPendingAuth()
 	}
-
-	req, err := http.NewRequest("POST", AnthropicTokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: %s", security.SanitizeResponseBody(respBody))
-	}
-
-	var result struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int64  `json:"expires_in"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Clear pending verifier and state
-	pendingOAuthMu.Lock()
-	pendingOAuth = nil
-	pendingOAuthMu.Unlock()
-
-	expiresIn := result.ExpiresIn
-	if expiresIn == 0 {
-		expiresIn = 3600
-	}
-
-	return &OAuthTokens{
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		ExpiresAt:    time.Now().Unix() + expiresIn,
-	}, nil
+	return tokens, err
 }
 
 // RefreshAnthropicToken refreshes the access token
 func RefreshAnthropicToken(refreshToken string) (*OAuthTokens, error) {
-	form := url.Values{
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {refreshToken},
-		"client_id":     {config.Get().Providers["claude"].OAuthClientID},
-	}
-
-	req, err := http.NewRequest("POST", AnthropicTokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token refresh failed: %s", security.SanitizeResponseBody(respBody))
-	}
-
-	var result struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int64  `json:"expires_in"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	expiresIn := result.ExpiresIn
-	if expiresIn == 0 {
-		expiresIn = 3600
-	}
-
-	// Use new refresh token if provided, otherwise keep the old one
-	newRefreshToken := result.RefreshToken
-	if newRefreshToken == "" {
-		newRefreshToken = refreshToken
-	}
-
-	return &OAuthTokens{
-		AccessToken:  result.AccessToken,
-		RefreshToken: newRefreshToken,
-		ExpiresAt:    time.Now().Unix() + expiresIn,
-	}, nil
-}
-
-// HasPendingAuth returns true if there's a pending OAuth flow
-func HasPendingAuth() bool {
-	pendingOAuthMu.Lock()
-	defer pendingOAuthMu.Unlock()
-	return pendingOAuth != nil
-}
-
-// openBrowser opens the URL in the default browser
-func openBrowser(url string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		return fmt.Errorf("unsupported platform")
-	}
-
-	return cmd.Start()
-}
-
-// generateRandomString generates a secure random string of the specified length.
-func generateRandomString(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
+	cfg := getAnthropicConfig("")
+	return RefreshToken(cfg.TokenURL, cfg.ClientID, "", refreshToken)
 }
