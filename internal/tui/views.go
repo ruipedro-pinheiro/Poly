@@ -10,15 +10,12 @@ import (
 	"github.com/pedromelo/poly/internal/theme"
 	"github.com/pedromelo/poly/internal/tui/components/messages/tools"
 	"github.com/pedromelo/poly/internal/tui/core"
-	tuiLayout "github.com/pedromelo/poly/internal/tui/layout"
 )
 
-// chatWidth returns the width available for the chat area from the layout context.
 func (m Model) chatWidth() int {
 	return m.layout.ChatWidth
 }
 
-// contentWidth returns the width available for message content from the layout context.
 func (m Model) contentWidth() int {
 	return m.layout.ContentWidth
 }
@@ -58,10 +55,11 @@ func (m Model) View() tea.View {
 func (m Model) renderChat() string {
 	header := m.renderHeader()
 
+	// Chat area with consistent padding
 	chatArea := lipgloss.NewStyle().
 		Width(m.chatWidth()).
 		Height(m.viewport.Height()).
-		Padding(0, 1).
+		Padding(1, 2).
 		Render(m.viewport.View())
 
 	inputArea := m.renderInput()
@@ -83,7 +81,6 @@ func (m Model) renderChat() string {
 	return result
 }
 
-// overlayRight places panel on the right side of base, line by line.
 func overlayRight(base, panel string, totalWidth int) string {
 	baseLines := strings.Split(base, "\n")
 	panelLines := strings.Split(panel, "\n")
@@ -101,14 +98,12 @@ func overlayRight(base, panel string, totalWidth int) string {
 			if availBase < 0 {
 				availBase = 0
 			}
-			// Truncate base line if it would overlap the panel
 			if baseW > availBase {
 				baseLine = lipgloss.NewStyle().Width(availBase).Render(baseLine)
 			} else {
-				// Pad base to reach the panel position
 				pad := availBase - baseW
 				if pad > 0 {
-					baseLine = baseLine + strings.Repeat(" ", pad)
+					baseLine += strings.Repeat(" ", pad)
 				}
 			}
 			out[i] = baseLine + panelLines[i]
@@ -121,26 +116,21 @@ func overlayRight(base, panel string, totalWidth int) string {
 }
 
 func (m Model) renderHeader() string {
-	return m.headerBar.View()
+	return theme.HeaderStyle.Width(m.width).Render(m.headerBar.View())
 }
 
 func (m Model) renderInput() string {
-	inputBoxStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Surface2).
-		Padding(0, 1).
-		Width(m.width - tuiLayout.InputWidthOffset)
-
+	style := theme.InputBoxStyle
 	if m.focused == "input" {
-		inputBoxStyle = inputBoxStyle.BorderForeground(theme.Mauve)
+		style = theme.InputFocusedStyle
 	}
 
-	// Provider indicator
+	style = style.Width(m.width - 4).MarginLeft(2)
+
 	providerDot := lipgloss.NewStyle().
 		Foreground(theme.ProviderColor(m.defaultProvider)).
 		Render("● ")
 
-	// Image attachment indicator
 	imageIndicator := ""
 	if len(m.pendingImages) > 0 {
 		imageIndicator = lipgloss.NewStyle().
@@ -148,66 +138,51 @@ func (m Model) renderInput() string {
 			Render(fmt.Sprintf(" [img:%d] ", len(m.pendingImages)))
 	}
 
-	content := m.textarea.View()
+	textArea := m.textarea.View()
+	inputContent := providerDot + imageIndicator + textArea
 
-	inputContent := lipgloss.NewStyle().
-		Width(m.width - tuiLayout.InputBoxPadding).
-		Render(providerDot + imageIndicator + content)
-
-	// Hints below the box
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).MarginLeft(4)
 	var hints string
 	if m.isStreaming {
 		hints = hintStyle.Render("esc stop")
 	} else if strings.TrimSpace(m.textarea.Value()) == "" {
 		hints = hintStyle.Render("enter send · @provider")
-	} else {
-		hints = ""
 	}
 
-	box := inputBoxStyle.Render(inputContent)
-
-	return lipgloss.NewStyle().
-		Padding(0, 1).
-		Render(box + "\n" + lipgloss.NewStyle().Padding(0, 2).Render(hints))
+	return lipgloss.JoinVertical(lipgloss.Left,
+		style.Render(inputContent),
+		hints,
+		"", // Extra spacer
+	)
 }
 
 func (m Model) renderStatusBar() string {
-	return m.statusBar.View()
+	return theme.StatusBarStyle.Width(m.width).Render(m.statusBar.View())
 }
 
 func (m *Model) updateViewport() {
 	var content strings.Builder
 
 	if len(m.messages) == 0 {
-		// Welcome message when no conversations yet
 		welcomeStyle := lipgloss.NewStyle().
 			Foreground(theme.Overlay1).
 			Italic(true).
-			Width(m.contentWidth())
+			Width(m.contentWidth() - 4).
+			Padding(2, 4)
 
-		tipStyle := lipgloss.NewStyle().
-			Foreground(theme.Overlay0)
-
-		welcome := welcomeStyle.Render("Start a conversation with any AI model.\n\n")
-		tips := tipStyle.Render(
+		welcome := welcomeStyle.Render("Start a conversation with any AI model.\n\n" +
 			"Tips:\n" +
-				"  * Type a message to chat with @" + m.defaultProvider + "\n" +
-				"  * Use @claude, @gpt, @gemini, or @grok to pick a model\n" +
-				"  * Use @all to ask all connected models at once\n" +
-				"  * Ctrl+D opens the dashboard to connect providers\n" +
-				"  * Ctrl+K opens the command palette\n" +
-				"  * Ctrl+T toggles thinking mode (ON by default)",
-		)
-		content.WriteString(welcome + tips)
+			"  * Type a message to chat with @" + m.defaultProvider + "\n" +
+			"  * Use @claude, @gpt, @gemini, or @grok to pick a model\n" +
+			"  * Use @all to ask all connected models at once\n" +
+			"  * Ctrl+D opens the dashboard\n" +
+			"  * Ctrl+K opens the command palette")
+		content.WriteString(welcome)
 	} else {
 		for i, msg := range m.messages {
 			content.WriteString(m.renderMessage(msg, i))
-			// Add extra spacing between messages (not after the last one)
 			if i < len(m.messages)-1 {
 				content.WriteString("\n\n")
-			} else {
-				content.WriteString("\n")
 			}
 		}
 	}
@@ -217,7 +192,7 @@ func (m *Model) updateViewport() {
 }
 
 func (m Model) renderMessage(msg Message, index int) string {
-	availWidth := m.contentWidth()
+	availWidth := m.contentWidth() - 4
 
 	switch msg.Role {
 	case "user":
@@ -231,195 +206,84 @@ func (m Model) renderMessage(msg Message, index int) string {
 	}
 }
 
-// renderUserMessage renders a user message with a thick left bar (Mauve)
 func (m Model) renderUserMessage(msg Message, availWidth int) string {
-	// Label
-	label := lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render("You")
-	imageCount := len(msg.Images) + len(msg.ImageData)
-	if imageCount > 0 {
-		imgBadge := lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf(" [img:%d]", imageCount))
-		label += imgBadge
+	label := lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).Render("YOU")
+	if count := len(msg.Images) + len(msg.ImageData); count > 0 {
+		label += lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf(" [img:%d]", count))
 	}
 
-	// Content
-	contentStyle := lipgloss.NewStyle().
+	content := lipgloss.NewStyle().
 		Foreground(theme.Text).
-		Width(availWidth - 4)
-	content := contentStyle.Render(msg.Content)
+		Width(availWidth - 2).
+		Render(msg.Content)
 
-	// Wrap in thick left border
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.ThickBorder()).
-		BorderLeft(true).
-		BorderForeground(theme.Mauve).
-		PaddingLeft(1).
-		Width(availWidth).
-		Render(label + "\n" + content)
+	return theme.UserBubbleStyle.Width(availWidth).Render(label + "\n" + content)
 }
 
-// renderSystemMessage renders a system/info message dimmed
 func (m Model) renderSystemMessage(msg Message, availWidth int) string {
 	return lipgloss.NewStyle().
 		Foreground(theme.Overlay0).
 		Italic(true).
+		Padding(0, 2).
 		Width(availWidth).
-		Render(msg.Content)
+		Render("— " + msg.Content)
 }
 
-// renderAssistantMessage renders an assistant message with provider-colored left bar
 func (m Model) renderAssistantMessage(msg Message, index int, availWidth int, isExpanded bool, isStreamingLast bool) string {
 	providerColor := theme.ProviderColor(msg.Provider)
-
-	// Header line: ◇ provider · time ─────────
-	headerParts := []string{core.IconModel + " " + msg.Provider}
-	headerText := lipgloss.NewStyle().Foreground(providerColor).Bold(true).Render(strings.Join(headerParts, ""))
-
-	// Separator line after header
-	headerLen := lipgloss.Width(headerText)
-	sepLen := availWidth - headerLen - 5
-	if sepLen < 3 {
-		sepLen = 3
-	}
-	separator := lipgloss.NewStyle().Foreground(theme.Surface2).Render(" " + strings.Repeat("─", sepLen))
-	header := headerText + separator
-
-	// Inner width for content
-	innerWidth := availWidth - 4
-	if innerWidth < 20 {
-		innerWidth = 20
-	}
-
+	
+	// Elegant header
+	name := strings.ToUpper(msg.Provider)
+	header := lipgloss.NewStyle().Foreground(providerColor).Bold(true).Render(core.IconModel + " " + name)
+	
+	innerWidth := availWidth - 2
 	var parts []string
 	parts = append(parts, header)
 
-	// Thinking block - collapsed by default, expanded during streaming or on toggle
 	if msg.Thinking != "" {
-		showExpanded := isExpanded || isStreamingLast
-		if showExpanded {
-			thinkLabel := lipgloss.NewStyle().
-				Foreground(theme.Lavender).
-				Bold(true).
-				Render("▼ Thinking")
-
-			thinkContent := lipgloss.NewStyle().
-				Foreground(theme.Overlay1).
-				Italic(true).
-				Width(innerWidth).
-				Render(msg.Thinking)
-
-			thinkBlock := lipgloss.NewStyle().
-				Background(theme.Surface0).
-				Padding(0, 1).
-				Width(innerWidth).
-				Render(thinkLabel + "\n" + thinkContent)
-
-			parts = append(parts, thinkBlock)
+		if isExpanded || isStreamingLast {
+			thinkContent := theme.ThinkingStyle.Width(innerWidth).Render(msg.Thinking)
+			parts = append(parts, thinkContent)
 		} else {
-			collapsed := lipgloss.NewStyle().
-				Foreground(theme.Overlay1).
-				Render(core.IconActive + " Thinking...")
+			collapsed := lipgloss.NewStyle().Foreground(theme.Overlay1).PaddingLeft(2).Render("• Thinking...")
 			parts = append(parts, collapsed)
 		}
 	}
 
-	// Render body: inline interleaved blocks if available, else legacy
+	// Render blocks or fallback content
 	if len(msg.Blocks) > 0 {
-		// Check if all tool calls are done so we can batch-summarize
-		allDone := true
-		hasErrors := false
-		var successNames []string
-		for _, tc := range msg.ToolCalls {
-			status := toolCallStatus(tc.Status)
-			if status == tools.ToolStatusRunning || status == tools.ToolStatusPending {
-				allDone = false
-				break
-			}
-			if status == tools.ToolStatusError {
-				hasErrors = true
-			} else {
-				successNames = append(successNames, tc.Name)
-			}
-		}
-
-		if allDone && len(msg.ToolCalls) > 1 {
-			// All tools finished: render text blocks normally, replace tool blocks with batch summary
-			for _, block := range msg.Blocks {
-				if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
+		for _, block := range msg.Blocks {
+			switch block.Type {
+			case "text":
+				if strings.TrimSpace(block.Text) != "" {
 					parts = append(parts, renderMarkdown(block.Text, innerWidth))
 				}
-			}
-			// Batch summary for successes
-			if len(successNames) > 0 {
-				parts = append(parts, tools.RenderBatchSummary(successNames))
-			}
-			// Show errors individually
-			if hasErrors {
-				for _, tc := range msg.ToolCalls {
-					if toolCallStatus(tc.Status) == tools.ToolStatusError {
-						parts = append(parts, renderInlineToolCall(tc, innerWidth))
-					}
-				}
-			}
-		} else {
-			// Still running or single tool: render blocks individually
-			for _, block := range msg.Blocks {
-				switch block.Type {
-				case "text":
-					if strings.TrimSpace(block.Text) != "" {
-						parts = append(parts, renderMarkdown(block.Text, innerWidth))
-					}
-				case "tool":
-					if block.ToolIdx < len(msg.ToolCalls) {
-						tc := msg.ToolCalls[block.ToolIdx]
-						parts = append(parts, renderInlineToolCall(tc, innerWidth))
-					}
+			case "tool":
+				if block.ToolIdx < len(msg.ToolCalls) {
+					tc := msg.ToolCalls[block.ToolIdx]
+					parts = append(parts, renderInlineToolCall(tc, innerWidth))
 				}
 			}
 		}
-	} else {
-		// Legacy fallback
-		if strings.TrimSpace(msg.Content) != "" {
-			parts = append(parts, renderMarkdown(msg.Content, innerWidth))
-		}
-		if len(msg.ToolCalls) > 0 {
-			rendered := renderToolCallBlock(msg.ToolCalls, innerWidth)
-			if rendered != "" {
-				parts = append(parts, rendered)
-			}
-		}
+	} else if strings.TrimSpace(msg.Content) != "" {
+		parts = append(parts, renderMarkdown(msg.Content, innerWidth))
 	}
 
-	// Per-message token/cost annotation (subtle, at the bottom)
+	// Stats line
 	if msg.InputTokens > 0 || msg.OutputTokens > 0 {
-		tokenInfo := fmt.Sprintf("%s/%s tokens",
-			formatTokenCount(msg.InputTokens),
-			formatTokenCount(msg.OutputTokens))
+		stats := fmt.Sprintf("%s/%s tokens", formatTokenCount(msg.InputTokens), formatTokenCount(msg.OutputTokens))
 		if cost := calculateCost(msg.InputTokens, msg.OutputTokens, msg.Provider); cost > 0 {
-			tokenInfo += fmt.Sprintf(" · $%.4f", cost)
+			stats += fmt.Sprintf(" · $%.4f", cost)
 		}
-		tokenLine := lipgloss.NewStyle().
-			Foreground(theme.Overlay0).
-			Italic(true).
-			Render(tokenInfo)
-		parts = append(parts, tokenLine)
+		parts = append(parts, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(stats))
 	}
 
 	body := strings.Join(parts, "\n")
-
-	// Thick left bar in provider color - clean and simple
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.ThickBorder()).
-		BorderLeft(true).
-		BorderForeground(providerColor).
-		PaddingLeft(1).
-		Width(availWidth).
-		Render(body)
+	return lipgloss.NewStyle().PaddingLeft(1).Render(body)
 }
 
-// renderInlineToolCall renders a single tool call inline
 func renderInlineToolCall(tc ToolCallData, width int) string {
 	status := toolCallStatus(tc.Status)
-
 	rendered := tools.RenderToolCall(width-4, &tools.RenderOpts{
 		Name:    tc.Name,
 		Args:    tc.Args,
@@ -429,151 +293,48 @@ func renderInlineToolCall(tc ToolCallData, width int) string {
 		Compact: true,
 	})
 
-	switch status {
-	case tools.ToolStatusRunning, tools.ToolStatusPending:
-		// Active: box with visible border
-		return lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(theme.Surface2).
-			Padding(0, 1).
-			Width(width).
-			Render(rendered)
+	style := lipgloss.NewStyle().
+		Padding(0, 1).
+		Width(width).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Surface1)
 
-	case tools.ToolStatusError:
-		// Error: red box (renderer already includes error details)
-		return lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(theme.Red).
-			Padding(0, 1).
-			Width(width).
-			Render(rendered)
-
-	default:
-		// Success: dim compact line, no box
-		return lipgloss.NewStyle().Foreground(theme.Overlay0).Render(rendered)
+	if status == tools.ToolStatusError {
+		style = style.BorderForeground(theme.Red)
+	} else if status == tools.ToolStatusRunning {
+		style = style.BorderForeground(theme.Yellow)
 	}
+
+	return style.Render(rendered)
 }
 
-// toolCallStatus converts int status to ToolStatus
 func toolCallStatus(s int) tools.ToolStatus {
 	switch s {
-	case 0:
-		return tools.ToolStatusPending
-	case 1:
-		return tools.ToolStatusRunning
-	case 2:
-		return tools.ToolStatusSuccess
-	case 3:
-		return tools.ToolStatusError
-	default:
-		return tools.ToolStatusPending
+	case 1: return tools.ToolStatusRunning
+	case 2: return tools.ToolStatusSuccess
+	case 3: return tools.ToolStatusError
+	default: return tools.ToolStatusPending
 	}
 }
 
-// renderToolCallBlock renders tool calls, collapsing completed ones
-func renderToolCallBlock(calls []ToolCallData, width int) string {
-	containerStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Surface2).
-		Padding(0, 1).
-		Width(width)
-
-	// Count by status
-	success, errors, active := 0, 0, 0
-	for _, tc := range calls {
-		switch toolCallStatus(tc.Status) {
-		case tools.ToolStatusSuccess:
-			success++
-		case tools.ToolStatusError:
-			errors++
-		default:
-			active++ // pending or running
-		}
-	}
-
-	allDone := active == 0
-	var lines []string
-
-	if allDone && errors == 0 {
-		// All success: dim one-liner summary
-		label := "tool"
-		if success > 1 {
-			label = "tools"
-		}
-		return lipgloss.NewStyle().Foreground(theme.Overlay0).Render(
-			fmt.Sprintf("%s %d %s completed", core.IconCheck, success, label),
-		)
-	}
-
-	if allDone {
-		// All done but has errors: show errors only
-		for _, tc := range calls {
-			if toolCallStatus(tc.Status) == tools.ToolStatusError {
-				rendered := tools.RenderToolCall(width-4, &tools.RenderOpts{
-					Name:    tc.Name,
-					Args:    tc.Args,
-					Result:  tc.Result,
-					IsError: tc.IsError,
-					Status:  tools.ToolStatusError,
-					Compact: true,
-				})
-				lines = append(lines, rendered)
-			}
-		}
-	} else {
-		// Still running: show active/error calls, collapse completed
-		if success > 0 {
-			lines = append(lines, lipgloss.NewStyle().Foreground(theme.Overlay0).Render(
-				fmt.Sprintf("%s %d completed", core.IconCheck, success),
-			))
-		}
-		for _, tc := range calls {
-			status := toolCallStatus(tc.Status)
-			if status == tools.ToolStatusSuccess {
-				continue // collapsed above
-			}
-			rendered := tools.RenderToolCall(width-4, &tools.RenderOpts{
-				Name:    tc.Name,
-				Args:    tc.Args,
-				Result:  tc.Result,
-				IsError: tc.IsError,
-				Status:  status,
-				Compact: true,
-			})
-			lines = append(lines, rendered)
-		}
-	}
-
-	content := strings.Join(lines, "\n")
-	return containerStyle.Render(content)
-}
-
-// addMessage adds a message and persists it to the session
 func (m *Model) addMessage(msg Message) {
 	m.messages = append(m.messages, msg)
 	_ = session.AddMessage(m.toSessionMsg(msg))
 }
 
-// saveLastMessage persists the last message (called when streaming completes)
 func (m *Model) saveLastMessage() {
-	if len(m.messages) == 0 {
-		return
+	if len(m.messages) > 0 {
+		m.saveMessageAt(len(m.messages) - 1)
 	}
-	m.saveMessageAt(len(m.messages) - 1)
 }
 
-// formatTokenCount formats a token count for display (e.g. 1234 -> "1.2k")
 func formatTokenCount(n int) string {
-	if n >= 1000 {
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	}
+	if n >= 1000 { return fmt.Sprintf("%.1fk", float64(n)/1000) }
 	return fmt.Sprintf("%d", n)
 }
 
-// saveMessageAt persists a specific message by index
 func (m *Model) saveMessageAt(idx int) {
-	if idx < 0 || idx >= len(m.messages) {
-		return
+	if idx >= 0 && idx < len(m.messages) {
+		_ = session.AddMessage(m.toSessionMsg(m.messages[idx]))
 	}
-	_ = session.AddMessage(m.toSessionMsg(m.messages[idx]))
 }
