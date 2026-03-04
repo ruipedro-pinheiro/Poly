@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pedromelo/poly/internal/security"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -75,7 +76,13 @@ func (p *CustomProvider) Stream(ctx context.Context, messages []Message, toolDef
 	eventChan := make(chan StreamEvent, 64)
 
 	go func() {
-		defer close(eventChan)
+		defer func() {
+			if r := recover(); r != nil {
+				defer func() { recover() }() //nolint:errcheck // protect against closed channel
+				eventChan <- StreamEvent{Type: "error", Error: fmt.Errorf("internal error (panic recovered)")}
+			}
+			close(eventChan)
+		}()
 
 		role := GetRole(opts)
 		thinkingMode := GetThinkingMode(opts)
@@ -449,7 +456,7 @@ func (p *CustomProvider) doRequest(ctx context.Context, body interface{}, thinki
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
 
 		if !ShouldRetry(resp.StatusCode) {
 			return nil, lastErr

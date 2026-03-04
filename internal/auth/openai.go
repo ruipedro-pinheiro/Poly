@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pedromelo/poly/internal/security"
 )
 
 // OpenAI OAuth config (from Codex CLI, public client)
@@ -163,7 +165,7 @@ func exchangeOpenAICode(code, redirectURI, verifier string) (*OAuthTokens, error
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		return nil, fmt.Errorf("token exchange failed: %s", security.SanitizeResponseBody(body))
 	}
 
 	var result struct {
@@ -212,7 +214,7 @@ func RefreshOpenAIToken(refreshToken string) (*OAuthTokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
+		return nil, fmt.Errorf("token refresh failed: %s", security.SanitizeResponseBody(body))
 	}
 
 	var result struct {

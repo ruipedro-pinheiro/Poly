@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pedromelo/poly/internal/config"
+	"github.com/pedromelo/poly/internal/security"
 )
 
 const (
@@ -152,7 +153,7 @@ func ExchangeAnthropicCode(input string) (*OAuthTokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: %s", string(respBody))
+		return nil, fmt.Errorf("token exchange failed: %s", security.SanitizeResponseBody(respBody))
 	}
 
 	var result struct {
@@ -205,7 +206,7 @@ func RefreshAnthropicToken(refreshToken string) (*OAuthTokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token refresh failed: %s", string(respBody))
+		return nil, fmt.Errorf("token refresh failed: %s", security.SanitizeResponseBody(respBody))
 	}
 
 	var result struct {

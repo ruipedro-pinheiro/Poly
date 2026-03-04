@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pedromelo/poly/internal/security"
 )
 
 const (
@@ -55,7 +57,7 @@ func StartCopilotDeviceFlow() (*DeviceFlowResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("device code request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("device code request failed (HTTP %d): %s", resp.StatusCode, security.SanitizeResponseBody(body))
 	}
 
 	var result DeviceFlowResponse
@@ -174,7 +176,7 @@ func getCopilotSessionToken(githubToken string) (*OAuthTokens, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("copilot token request failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("copilot token request failed (HTTP %d): %s", resp.StatusCode, security.SanitizeResponseBody(body))
 	}
 
 	var result struct {

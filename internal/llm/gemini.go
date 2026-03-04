@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pedromelo/poly/internal/auth"
+	"github.com/pedromelo/poly/internal/security"
 	"github.com/pedromelo/poly/internal/tools"
 )
 
@@ -60,7 +61,13 @@ func (p *GeminiProvider) Stream(ctx context.Context, messages []Message, toolDef
 	eventChan := make(chan StreamEvent, 64)
 
 	go func() {
-		defer close(eventChan)
+		defer func() {
+			if r := recover(); r != nil {
+				defer func() { recover() }() //nolint:errcheck // protect against closed channel
+				eventChan <- StreamEvent{Type: "error", Error: fmt.Errorf("internal error (panic recovered)")}
+			}
+			close(eventChan)
+		}()
 
 		token, err := auth.GetStorage().GetAccessToken("gemini")
 		if err != nil || token == "" {
@@ -257,7 +264,7 @@ func (p *GeminiProvider) streamRequestPublicAPI(ctx context.Context, body interf
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
 
 		if !ShouldRetry(resp.StatusCode) {
 			return nil, lastErr
@@ -514,7 +521,7 @@ func (p *GeminiProvider) streamRequestCodeAssist(ctx context.Context, body inter
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		lastErr = fmt.Errorf("Code Assist error (%d): %s", resp.StatusCode, string(bodyBytes))
+		lastErr = fmt.Errorf("Code Assist error (%d): %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
 
 		if !ShouldRetry(resp.StatusCode) {
 			return nil, lastErr
@@ -715,7 +722,7 @@ func (p *GeminiProvider) resolveCodeAssistProjectID(token string) (string, error
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		codeAssistProjectErr = fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, string(bodyBytes))
+		codeAssistProjectErr = fmt.Errorf("loadCodeAssist failed (%d): %s", resp.StatusCode, security.SanitizeResponseBody(bodyBytes))
 		return "", codeAssistProjectErr
 	}
 

@@ -10,15 +10,17 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/pedromelo/poly/internal/security"
 )
 
 // Google OAuth config (from Gemini CLI, public credentials)
 const (
-	GoogleClientID           = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+	GoogleClientID            = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
 	googleClientSecretDefault = "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"
-	GoogleAuthorizeURL       = "https://accounts.google.com/o/oauth2/v2/auth"
-	GoogleTokenURL           = "https://oauth2.googleapis.com/token"
-	GoogleCallbackPort       = 8086
+	GoogleAuthorizeURL        = "https://accounts.google.com/o/oauth2/v2/auth"
+	GoogleTokenURL            = "https://oauth2.googleapis.com/token"
+	GoogleCallbackPort        = 8086
 )
 
 // GoogleClientSecret returns the OAuth client secret, preferring env var over default.
@@ -164,7 +166,7 @@ func exchangeGoogleCode(code, redirectURI string) (*OAuthTokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		return nil, fmt.Errorf("token exchange failed: %s", security.SanitizeResponseBody(body))
 	}
 
 	var result struct {
@@ -214,7 +216,7 @@ func RefreshGoogleToken(refreshToken string) (*OAuthTokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
+		return nil, fmt.Errorf("token refresh failed: %s", security.SanitizeResponseBody(body))
 	}
 
 	var result struct {

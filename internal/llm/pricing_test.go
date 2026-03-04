@@ -46,9 +46,9 @@ func TestCalculateCost_ZeroTokens(t *testing.T) {
 }
 
 func TestCalculateCost_CheapModel(t *testing.T) {
-	// gemini-2.5-flash: input=0.15, output=0.60
+	// gemini-2.5-flash: input=0.30, output=2.50
 	got := CalculateCost(1_000_000, 1_000_000, "gemini-2.5-flash")
-	want := 0.75
+	want := 2.80
 	if !almostEqual(got, want, 0.001) {
 		t.Errorf("CalculateCost(1M, 1M, gemini-2.5-flash) = %f, want %f", got, want)
 	}

@@ -17,7 +17,7 @@ import (
 // Blocked patterns are in internal/security and shared with shell/executor.go.
 
 const (
-	maxOutput     = 30000
+	maxOutput      = 30000
 	defaultTimeout = 60 * time.Second
 	maxTimeout     = 10 * time.Minute
 )
@@ -123,7 +123,7 @@ func (t *BashTool) Execute(args map[string]interface{}) ToolResult {
 	// Execute command locally
 	cmd := exec.CommandContext(ctx, "bash", "-c", command)
 	cmd.Dir = cwd
-	cmd.Env = os.Environ()
+	cmd.Env = security.SafeEnv(os.Environ())
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -206,4 +206,3 @@ func truncateOutput(output string) string {
 		fmt.Sprintf("\n\n... (%d lines truncated) ...\n\n", skipped) +
 		strings.Join(lines[tailStart:], "\n")
 }
-
