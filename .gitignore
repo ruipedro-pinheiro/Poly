@@ -20,3 +20,10 @@ Thumbs.db
 
 # Go
 vendor/
+
+# Coverage
+coverage.out
+coverage.html
+
+# VHS demos (internal tooling, not public)
+demos/
