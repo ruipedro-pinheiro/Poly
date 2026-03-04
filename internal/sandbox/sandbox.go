@@ -27,10 +27,8 @@ var (
 )
 
 // Detect returns "podman", "docker", or "" if neither is available.
-// The result is cached after first call.
 func Detect() string {
 	runtimeOnce.Do(func() {
-		// Prefer podman (Fedora default, rootless)
 		if _, err := exec.LookPath("podman"); err == nil {
 			runtime = "podman"
 			return
@@ -50,12 +48,10 @@ func Available() bool {
 }
 
 // EnsureImage checks if the sandbox image exists locally, pulls it if not.
-// Returns nil on success, error with clear instructions on failure.
 func EnsureImage() error {
 	imageMu.Lock()
 	defer imageMu.Unlock()
 
-	// Already resolved
 	if imageReady {
 		return nil
 	}
@@ -69,21 +65,19 @@ func EnsureImage() error {
 		return imageErr
 	}
 
-	// Check if image exists locally
 	check := exec.Command(rt, "image", "inspect", Image)
 	if check.Run() == nil {
 		imageReady = true
 		return nil
 	}
 
-	// Try to pull
 	pull := exec.Command(rt, "pull", Image)
 	var stderr bytes.Buffer
 	pull.Stderr = &stderr
 	if err := pull.Run(); err != nil {
 		imageErr = fmt.Errorf(
 			"sandbox image '%s' not found locally and pull failed:\n%s\n\n"+
-				"Fix: run '%s pull %s' manually, or use 'make sandbox-setup'",
+				"Fix: run '%s pull %s' manually",
 			Image, strings.TrimSpace(stderr.String()), rt, Image)
 		return imageErr
 	}
@@ -91,7 +85,7 @@ func EnsureImage() error {
 	return nil
 }
 
-// ResetImageCheck allows retrying the image check (e.g. after manual pull)
+// ResetImageCheck allows retrying the image check
 func ResetImageCheck() {
 	imageMu.Lock()
 	defer imageMu.Unlock()
@@ -99,30 +93,38 @@ func ResetImageCheck() {
 	imageErr = nil
 }
 
-// Run executes a command inside a container, mounting cwd as /workspace.
-// Auto-pulls the image on first use if needed.
-// Returns stdout+stderr combined and the exit code.
+// Run executes a command inside a hardened container.
 func Run(ctx context.Context, command string, cwd string) (output string, exitCode int, err error) {
 	rt := Detect()
 	if rt == "" {
-		return "", 1, fmt.Errorf("no container runtime found (install podman or docker)")
+		return "", 1, fmt.Errorf("no container runtime found")
 	}
 
-	// Ensure image is available (auto-pull on first use)
 	if err := EnsureImage(); err != nil {
 		return "", 1, err
 	}
 
+	// Hardened sandbox arguments
 	args := []string{
 		"run", "--rm",
 		"-v", cwd + ":/workspace:Z",
 		"-w", "/workspace",
-		"--network=none",
-		"--read-only",
-		"--tmpfs", "/tmp:rw,size=64m",
-		Image,
-		"sh", "-c", command,
+		"--network=none",           // No internet access
+		"--read-only",              // Read-only root filesystem
+		"--tmpfs", "/tmp:rw,size=64m", // Small writable /tmp
+		"--cap-drop=all",           // Drop all capabilities
+		"--security-opt", "no-new-privileges", // Prevent privilege escalation
+		"--memory=512m",            // Max 512MB RAM
+		"--cpus=1",                 // Max 1 CPU core
+		"--pids-limit=50",          // Prevent fork bombs
 	}
+
+	// Podman-specific hardening: run as the same user as the host
+	if rt == "podman" {
+		args = append(args, "--userns=keep-id")
+	}
+
+	args = append(args, Image, "sh", "-c", command)
 
 	cmd := exec.CommandContext(ctx, rt, args...)
 
