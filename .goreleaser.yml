@@ -1,3 +1,6 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
 project_name: poly
 
 before:
@@ -39,6 +42,25 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^Merge"
+      - "^chore\\(deps\\):"
+  groups:
+    - title: '🚀 Features'
+      regexp: "^feat[(\\w)]*!?: "
+      order: 0
+    - title: '🛡️ Security'
+      regexp: "^security[(\\w)]*!?: "
+      order: 1
+    - title: '🐛 Bug Fixes'
+      regexp: "^fix[(\\w)]*!?: "
+      order: 2
+    - title: '⚙️ Refactoring'
+      regexp: "^refactor[(\\w)]*!?: "
+      order: 3
+    - title: '🧹 Housekeeping'
+      regexp: "^chore[(\\w)]*!?: "
+      order: 4
+    - title: Others
+      order: 999
 
 release:
   github:
