@@ -114,6 +114,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ControlRoom):
 		if m.state == viewControlRoom {
 			m.state = viewChat
+			cancelDeviceFlow() // cancel any in-progress device flow polling
 			m.oauthPending = ""
 			m.apiKeyPending = ""
 			m.authInput = ""
@@ -362,6 +363,7 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.oauthPending != "" || m.apiKeyPending != "" {
+			cancelDeviceFlow() // cancel any in-progress device flow polling
 			m.oauthPending = ""
 			m.apiKeyPending = ""
 			m.authInput = ""
@@ -559,6 +561,10 @@ func (m Model) handleControlRoomEnter() (tea.Model, tea.Cmd) {
 				m.status = "Opening browser for " + provCfg.Name + "..."
 				return m, startOAuthForProvider(provider)
 			}
+		case "device_flow":
+			m.oauthPending = provider
+			m.status = "Starting GitHub device flow..."
+			return m, startDeviceFlow(provider)
 		case "api_key":
 			m.apiKeyPending = provider
 			m.authInput = ""
@@ -641,6 +647,7 @@ func (m Model) handleAuthInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleControlRoomEnter()
 	}
 	if keyStr == "esc" {
+		cancelDeviceFlow() // cancel any in-progress device flow polling
 		m.oauthPending = ""
 		m.apiKeyPending = ""
 		m.authInput = ""

@@ -242,6 +242,7 @@ func RegisterAllProviders() {
 	RegisterProvider(NewGPTProvider(ProviderConfig{}))
 	RegisterProvider(NewGeminiProvider(ProviderConfig{}))
 	RegisterProvider(NewGrokProvider(ProviderConfig{}))
+	RegisterProvider(NewCopilotProvider(ProviderConfig{}))
 	RegisterProvider(NewOllamaProvider(ProviderConfig{}))
 }
 

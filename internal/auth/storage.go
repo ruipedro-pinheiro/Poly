@@ -179,6 +179,8 @@ func (s *Storage) GetAccessToken(provider string) (string, error) {
 				newTokens, err = RefreshOpenAIToken(auth.Tokens.RefreshToken)
 			case "gemini":
 				newTokens, err = RefreshGoogleToken(auth.Tokens.RefreshToken)
+			case "copilot":
+				newTokens, err = RefreshCopilotToken(auth.Tokens.RefreshToken)
 			default:
 				return auth.Tokens.AccessToken, nil
 			}

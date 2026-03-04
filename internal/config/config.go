@@ -473,6 +473,23 @@ func DefaultConfig() *Config {
 					"mini":    "grok-3-mini-beta",
 				},
 			},
+			"copilot": {
+				ID:        "copilot",
+				Name:      "Copilot",
+				Endpoint:  "https://api.githubcopilot.com",
+				Format:    "openai",
+				AuthType:  "device_flow",
+				MaxTokens: 4096,
+				Timeout:   300,
+				Color:     "#6e40c9",
+				CostTier:  0, // Included with GitHub Copilot subscription
+				Models: map[string]string{
+					"default": "gpt-4o",
+					"fast":    "gpt-4o-mini",
+					"claude":  "claude-sonnet-4",
+					"think":   "o3-mini",
+				},
+			},
 			"ollama": {
 				ID:        "ollama",
 				Name:      "Ollama",

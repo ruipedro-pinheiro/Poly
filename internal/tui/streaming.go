@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/pedromelo/poly/internal/auth"
@@ -592,6 +593,67 @@ func startOAuthForProvider(provider string) tea.Cmd {
 			return OAuthResultMsg{Provider: provider, Success: false, Error: "OAuth not supported for " + provider}
 		}
 
+		if err != nil {
+			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
+		}
+		auth.GetStorage().SetOAuthTokens(provider, tokens)
+		return OAuthResultMsg{Provider: provider, Success: true}
+	}
+}
+
+// deviceFlowCancel holds the cancel function for an in-progress device flow poll.
+// Protected by deviceFlowMu.
+var (
+	deviceFlowCancel context.CancelFunc
+	deviceFlowMu     sync.Mutex
+)
+
+// cancelDeviceFlow cancels any in-progress device flow polling.
+func cancelDeviceFlow() {
+	deviceFlowMu.Lock()
+	defer deviceFlowMu.Unlock()
+	if deviceFlowCancel != nil {
+		deviceFlowCancel()
+		deviceFlowCancel = nil
+	}
+}
+
+// startDeviceFlow initiates the GitHub device flow and returns a DeviceFlowStartedMsg.
+func startDeviceFlow(provider string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := auth.StartCopilotDeviceFlow()
+		if err != nil {
+			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
+		}
+		return DeviceFlowStartedMsg{
+			Provider:        provider,
+			UserCode:        resp.UserCode,
+			VerificationURI: resp.VerificationURI,
+			DeviceCode:      resp.DeviceCode,
+			Interval:        resp.Interval,
+		}
+	}
+}
+
+// pollDeviceFlow polls GitHub in the background until the user authorizes.
+// On success, it exchanges the GitHub token for a Copilot session token.
+func pollDeviceFlow(provider, deviceCode string, interval int) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+
+		// Store the cancel function so Esc can abort the poll
+		deviceFlowMu.Lock()
+		deviceFlowCancel = cancel
+		deviceFlowMu.Unlock()
+
+		defer func() {
+			cancel()
+			deviceFlowMu.Lock()
+			deviceFlowCancel = nil
+			deviceFlowMu.Unlock()
+		}()
+
+		tokens, err := auth.PollCopilotDeviceFlow(ctx, deviceCode, interval)
 		if err != nil {
 			return OAuthResultMsg{Provider: provider, Success: false, Error: err.Error()}
 		}

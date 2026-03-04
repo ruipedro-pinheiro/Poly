@@ -7,8 +7,8 @@ import (
 	"github.com/pedromelo/poly/internal/auth"
 	"github.com/pedromelo/poly/internal/config"
 	"github.com/pedromelo/poly/internal/theme"
-	"github.com/pedromelo/poly/internal/tui/core"
 	splashPkg "github.com/pedromelo/poly/internal/tui/components/splash"
+	"github.com/pedromelo/poly/internal/tui/core"
 	"github.com/pedromelo/poly/internal/tui/styles"
 )
 
@@ -204,6 +204,8 @@ func (m Model) renderControlRoom() string {
 				authLabel = "OAuth"
 			case "api_key":
 				authLabel = "API"
+			case "device_flow":
+				authLabel = "GitHub"
 			default:
 				authLabel = "Custom"
 			}
@@ -272,55 +274,88 @@ func (m Model) renderControlRoom() string {
 
 	// Auth input area
 	if m.oauthPending != "" || m.apiKeyPending != "" {
-		var label, placeholder string
+		// Check if this is a device flow (no user input needed)
+		isDeviceFlow := false
 		if m.oauthPending != "" {
-			label = "Paste OAuth code for " + m.oauthPending
-			placeholder = "waiting for code..."
-		} else {
-			label = "Paste API key for " + m.apiKeyPending
-			placeholder = "waiting for key..."
-		}
-
-		content.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render(label) + "\n")
-
-		if m.authStatusMsg != "" {
-			statusColor := theme.Green
-			if strings.HasPrefix(m.authStatusMsg, "Error:") {
-				statusColor = theme.Red
-			} else if m.authStatusMsg == "Exchanging code..." {
-				statusColor = theme.Overlay1
+			cfg := config.Get()
+			if provCfg, ok := cfg.Providers[m.oauthPending]; ok {
+				isDeviceFlow = provCfg.AuthType == "device_flow"
 			}
-			content.WriteString(lipgloss.NewStyle().Foreground(statusColor).Render(m.authStatusMsg) + "\n")
 		}
-		content.WriteString("\n")
 
-		inputContent := m.authInput
-		if inputContent == "" {
-			inputContent = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render(placeholder)
+		if isDeviceFlow {
+			// Device flow: show code and wait, no input box
+			label := "GitHub Device Flow"
+			content.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render(label) + "\n")
+
+			if m.authStatusMsg != "" {
+				statusColor := theme.Green
+				if strings.HasPrefix(m.authStatusMsg, "Error:") {
+					statusColor = theme.Red
+				} else {
+					statusColor = theme.Mauve
+				}
+				content.WriteString(lipgloss.NewStyle().Foreground(statusColor).Bold(true).Render(m.authStatusMsg) + "\n")
+			} else {
+				content.WriteString(lipgloss.NewStyle().Foreground(theme.Overlay1).Italic(true).Render("Starting...") + "\n")
+			}
+
+			content.WriteString("\n")
+			hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
+			hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
+			content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
 		} else {
-			if m.apiKeyPending != "" {
-				if len(inputContent) > 8 {
-					inputContent = inputContent[:4] + strings.Repeat("*", len(inputContent)-8) + inputContent[len(inputContent)-4:]
+			// Standard OAuth code paste or API key input
+			var label, placeholder string
+			if m.oauthPending != "" {
+				label = "Paste OAuth code for " + m.oauthPending
+				placeholder = "waiting for code..."
+			} else {
+				label = "Paste API key for " + m.apiKeyPending
+				placeholder = "waiting for key..."
+			}
+
+			content.WriteString(lipgloss.NewStyle().Foreground(theme.Yellow).Render(label) + "\n")
+
+			if m.authStatusMsg != "" {
+				statusColor := theme.Green
+				if strings.HasPrefix(m.authStatusMsg, "Error:") {
+					statusColor = theme.Red
+				} else if m.authStatusMsg == "Exchanging code..." {
+					statusColor = theme.Overlay1
+				}
+				content.WriteString(lipgloss.NewStyle().Foreground(statusColor).Render(m.authStatusMsg) + "\n")
+			}
+			content.WriteString("\n")
+
+			inputContent := m.authInput
+			if inputContent == "" {
+				inputContent = lipgloss.NewStyle().Foreground(theme.Overlay0).Italic(true).Render(placeholder)
+			} else {
+				if m.apiKeyPending != "" {
+					if len(inputContent) > 8 {
+						inputContent = inputContent[:4] + strings.Repeat("*", len(inputContent)-8) + inputContent[len(inputContent)-4:]
+					}
+				}
+				if len(inputContent) > 38 {
+					inputContent = inputContent[:35] + "..."
 				}
 			}
-			if len(inputContent) > 38 {
-				inputContent = inputContent[:35] + "..."
-			}
+
+			inputBox := lipgloss.NewStyle().
+				Foreground(theme.Text).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(theme.Surface2).
+				Padding(0, 1).
+				Width(innerWidth - 2).
+				Render(inputContent)
+
+			content.WriteString(inputBox + "\n\n")
+			hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
+			hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
+			content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" submit · "))
+			content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
 		}
-
-		inputBox := lipgloss.NewStyle().
-			Foreground(theme.Text).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(theme.Surface2).
-			Padding(0, 1).
-			Width(innerWidth - 2).
-			Render(inputContent)
-
-		content.WriteString(inputBox + "\n\n")
-		hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
-		hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)
-		content.WriteString(hintKey.Render("Enter") + hintDesc.Render(" submit · "))
-		content.WriteString(hintKey.Render("Esc") + hintDesc.Render(" cancel"))
 	} else {
 		hintKey := lipgloss.NewStyle().Foreground(theme.Subtext0)
 		hintDesc := lipgloss.NewStyle().Foreground(theme.Overlay0)

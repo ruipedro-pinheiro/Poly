@@ -35,17 +35,17 @@ type ContentBlock struct {
 
 // Message represents a chat message
 type Message struct {
-	Role         string   // "user" or provider name
-	Content      string   // full text (for persistence)
-	Provider     string   // which provider responded
-	Thinking     string   // thinking content (for extended thinking models)
-	Images       []string // file paths for persisted images
-	ImageData    [][]byte // raw image data (for pasted images, not persisted)
-	ImageTypes   []string // media types for ImageData
-	ToolCalls    []ToolCallData  // structured tool call data
-	Blocks       []ContentBlock  // ordered interleaved content (text + tools)
-	InputTokens  int      // tokens consumed by this message
-	OutputTokens int      // tokens generated for this message
+	Role         string         // "user" or provider name
+	Content      string         // full text (for persistence)
+	Provider     string         // which provider responded
+	Thinking     string         // thinking content (for extended thinking models)
+	Images       []string       // file paths for persisted images
+	ImageData    [][]byte       // raw image data (for pasted images, not persisted)
+	ImageTypes   []string       // media types for ImageData
+	ToolCalls    []ToolCallData // structured tool call data
+	Blocks       []ContentBlock // ordered interleaved content (text + tools)
+	InputTokens  int            // tokens consumed by this message
+	OutputTokens int            // tokens generated for this message
 }
 
 // modelOption represents a selectable model in the picker
@@ -86,13 +86,13 @@ type TableRondeStreamMsg struct {
 
 // tableRondeState tracks @all Table Ronde orchestration state
 type tableRondeState struct {
-	participants     []string          // all provider names participating
-	activeProviders  map[string]bool   // tracks which providers are still streaming
-	messageIndices   map[string]int    // provider -> message index
-	round            int               // current round (1-based)
-	maxRounds        int               // max rounds before auto-stop
-	userQuestion     string            // original user question
-	userImages       []llm.Image       // original user images
+	participants    []string        // all provider names participating
+	activeProviders map[string]bool // tracks which providers are still streaming
+	messageIndices  map[string]int  // provider -> message index
+	round           int             // current round (1-based)
+	maxRounds       int             // max rounds before auto-stop
+	userQuestion    string          // original user question
+	userImages      []llm.Image     // original user images
 }
 
 // pendingMention tracks an @mention request from one provider to another
@@ -106,6 +106,17 @@ type OAuthResultMsg struct {
 	Provider string
 	Success  bool
 	Error    string
+}
+
+// DeviceFlowStartedMsg is sent when a device flow OAuth has started.
+// The TUI should display the UserCode and VerificationURI to the user
+// and begin polling in the background for authorization.
+type DeviceFlowStartedMsg struct {
+	Provider        string
+	UserCode        string
+	VerificationURI string
+	DeviceCode      string
+	Interval        int
 }
 
 // StreamTickMsg is sent periodically during streaming to update elapsed time display
@@ -127,13 +138,13 @@ type UpdateAvailableMsg struct {
 
 // CompareResultMsg is sent when a single provider finishes its /compare response
 type CompareResultMsg struct {
-	Provider    string
-	Model       string
-	Content     string
-	Error       error
-	ElapsedMs   int64
-	Index       int // 0-based index in the compare sequence
-	Total       int // total providers being compared
+	Provider  string
+	Model     string
+	Content   string
+	Error     error
+	ElapsedMs int64
+	Index     int // 0-based index in the compare sequence
+	Total     int // total providers being compared
 }
 
 // CommandEntry represents a command in the command palette

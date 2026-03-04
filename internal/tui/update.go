@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -93,6 +94,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.authStatusMsg = "Error: " + msg.Error
 		}
 		return m, nil
+
+	case DeviceFlowStartedMsg:
+		m.authStatusMsg = fmt.Sprintf("Code: %s  →  %s", msg.UserCode, msg.VerificationURI)
+		return m, pollDeviceFlow(msg.Provider, msg.DeviceCode, msg.Interval)
 
 	case CompareResultMsg:
 		cmd := m.handleCompareResult(msg)
