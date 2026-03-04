@@ -1,0 +1,112 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill out all required fields — incomplete reports will be closed.
+
+  - type: input
+    id: poly-version
+    attributes:
+      label: Poly version
+      description: "Run `poly --version` or check the binary you downloaded"
+      placeholder: "v0.6.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation method
+      options:
+        - Built from source (go build / make build)
+        - Pre-built binary from Releases
+        - go install
+    validations:
+      required: true
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version (if built from source)
+      description: "Run `go version`. Skip if using pre-built binary."
+      placeholder: "go1.25.6 linux/amd64"
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / Architecture
+      description: "e.g. Fedora 42 x86_64, macOS 15 arm64, Ubuntu 24.04 amd64"
+      placeholder: "Fedora 42 x86_64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: LLM provider involved
+      description: "Which provider were you using when the bug occurred?"
+      options:
+        - Claude (Anthropic)
+        - GPT (OpenAI)
+        - Gemini (Google)
+        - Grok (xAI)
+        - Copilot (GitHub)
+        - Ollama (local)
+        - Custom provider
+        - Multiple / @all (Table Ronde)
+        - Not provider-specific
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model name
+      description: "The specific model, if relevant"
+      placeholder: "claude-sonnet-4-6, gpt-4.1, gemini-2.5-flash, etc."
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: "Clear description of the bug. What did you expect vs what actually happened?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "Minimal steps to trigger the bug"
+      placeholder: |
+        1. Start poly
+        2. Type `@claude ...`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output / logs
+      description: "Paste the exact error message or relevant terminal output. **DO NOT paste API keys or tokens.**"
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: sandbox
+    attributes:
+      label: Sandbox mode
+      options:
+        - label: Sandbox was enabled (podman/docker)
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config (optional)
+      description: "Paste relevant parts of `~/.poly/config.json`. **Remove all API keys first.**"
+      render: json

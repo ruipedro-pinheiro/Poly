@@ -4,34 +4,57 @@
 
 **Multi-AI terminal client with agentic tool use**
 
-Route prompts to Claude, Gemini, GPT, Grok, Ollama — or any OpenAI/Anthropic/Google-compatible API — from a single TUI.
+Route prompts to Claude, Gemini, GPT, Grok, Copilot, Ollama — or any OpenAI/Anthropic/Google-compatible API — from a single TUI.
 
 [![CI](https://github.com/ruipedro-pinheiro/Poly/actions/workflows/ci.yml/badge.svg)](https://github.com/ruipedro-pinheiro/Poly/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
-[![Bubble Tea](https://img.shields.io/badge/Bubble%20Tea-v2-FF5F87?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+)](https://github.com/charmbracelet/bubbletea)
-[![Catppuccin](https://img.shields.io/badge/theme-Catppuccin%20Mocha-cba6f7?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+)](https://catppuccin.com/)
-[![Lines](https://img.shields.io/badge/Go%20LOC-~28K-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
+> **BETA (v0.6.x)** — Poly is in active development. Expect breaking changes, rough edges, and missing features. The goal right now is to find bugs and validate the architecture. If you're here, you're a crash-tester, not a customer. [Open an issue](https://github.com/ruipedro-pinheiro/Poly/issues/new/choose) if something breaks.
+
 ---
 
-## What is Poly?
+## Stability
 
-Poly is a terminal-native AI client that lets you talk to multiple LLM providers from one interface. It's not a wrapper — it's a full agentic client with tool calling, MCP support, session management, and a TUI built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+Not everything is production-ready. Here's what works and what doesn't:
 
-```
-@claude refactor this function       → routes to Claude
-@gpt explain the error               → routes to GPT
-@all debate: Go vs Rust              → all providers discuss together
-ls -la | @gemini find the largest    → shell pipe mode
-```
+| Status | Feature | Notes |
+|--------|---------|-------|
+| **Stable** | Core TUI (input, rendering, keybindings) | Bubble Tea v2 + Catppuccin Mocha |
+| **Stable** | Provider integrations (Claude, GPT, Gemini, Grok, Ollama) | Streaming, tool calling, agentic loop |
+| **Stable** | Built-in tools (21) | File ops, bash, git, web, diffs |
+| **Stable** | Session management | Auto-save, resume, fork, export |
+| **Stable** | OAuth + API key auth | PKCE for Anthropic/OpenAI/Google, Device Flow for Copilot |
+| **In Test** | Copilot provider | Device Flow auth, session token refresh |
+| **In Test** | Table Ronde (`@all`) | Multi-provider conversations |
+| **In Test** | MCP support | JSON-RPC 2.0 stdio, auto-reconnect |
+| **In Test** | Custom providers | OpenAI/Anthropic/Google-compatible endpoints |
+| **Experimental** | Sandboxed bash (Podman/Docker) | Container isolation, no network, read-only root |
+| **Experimental** | Hooks system | Pre/post tool execution, Go templates |
+| **Experimental** | Skills system | Custom .md behaviors in `~/.poly/skills/` |
+| **Experimental** | Context compaction | Auto-summarize near context limit |
+
+---
+
+## Demo
+
+<!-- TODO: Record a short terminal demo (asciinema or GIF) showing:
+     1. Basic @claude / @gpt routing
+     2. @all Table Ronde
+     3. Shell pipe mode (ls | @gemini ...)
+     4. Tool use with approval flow
+-->
+
+*Demo recordings coming soon. See [Features](#features) below for details.*
+
+---
 
 ## Features
 
 ### Multi-Provider
-- **5 native providers**: Claude, GPT, Gemini, Grok, Ollama (local)
+- **6 native providers**: Claude, GPT, Gemini, Grok, Copilot, Ollama (local)
 - **Custom providers**: any OpenAI, Anthropic, or Google-compatible endpoint
 - **`@all` Table Ronde**: multi-round conversation where providers @mention and respond to each other
 - **Per-message cost tracking** with live token stats
@@ -46,8 +69,15 @@ ls -la | @gemini find the largest    → shell pipe mode
 - **Catppuccin Mocha** theme with per-provider accent colors
 - **30+ slash commands**: `/compact`, `/rewind`, `/stats`, `/mcp`, `/export`, ...
 - **Command palette** (`Ctrl+K`), **Control Room** (`Ctrl+D`), **Model picker** (`Ctrl+O`)
-- **Multi-line input** with Shift+Enter, auto-grow (1→5 lines)
+- **Multi-line input** with Shift+Enter, auto-grow (1-5 lines)
 - **Session management**: auto-save, resume, fork, export (Markdown/JSON)
+
+<!-- TODO: Add screenshots of:
+     - Main TUI interface with a conversation
+     - Control Room (Ctrl+D)
+     - Command palette (Ctrl+K)
+     - Tool approval dialog
+-->
 
 ### Under the Hood
 - **Context compaction**: auto-summarize old messages near context limit
@@ -55,27 +85,39 @@ ls -la | @gemini find the largest    → shell pipe mode
 - **POLY.md / MEMORY.md**: project instructions + persistent memory
 - **Skills system**: load custom behaviors from `~/.poly/skills/`
 - **Hooks**: pre/post tool execution hooks with Go templates
-- **OAuth + API key auth**: PKCE flows for Anthropic, OpenAI, Google
-- **Edit cascade**: 3-strategy file editing (exact → fuzzy → line-based)
+- **OAuth + API key auth**: PKCE flows for Anthropic, OpenAI, Google; Device Flow for Copilot
+- **Edit cascade**: 3-strategy file editing (exact, fuzzy, line-based)
 
 ## Quick Start
 
+### From releases (no Go required)
+
+Download the latest binary from [Releases](https://github.com/ruipedro-pinheiro/Poly/releases), extract, and run:
+
 ```bash
-# Clone & build
+tar xzf poly_*_linux_amd64.tar.gz
+./poly
+```
+
+### From source
+
+```bash
 git clone https://github.com/ruipedro-pinheiro/Poly.git
 cd Poly
 make build
-
-# Run
 ./poly
 
 # Or install to ~/go/bin/
 make install
 ```
 
+Requires **Go 1.25+**.
+
 ### Configuration
 
-Create `~/.poly/config.json`:
+Open the **Control Room** with `Ctrl+D` and connect providers via OAuth interactively.
+
+Or create `~/.poly/config.json`:
 
 ```json
 {
@@ -88,9 +130,7 @@ Create `~/.poly/config.json`:
 }
 ```
 
-Or skip the config — open the **Control Room** with `Ctrl+D` and connect via OAuth interactively.
-
-For local models, just add Ollama:
+For local models:
 
 ```json
 {
@@ -130,20 +170,6 @@ Ctrl+D                                # Control Room (manage providers)
 Ctrl+O                                # Model picker
 ```
 
-## Development
-
-```bash
-make build           # Compile binary
-make dev             # Build with race detector
-make release         # Optimized build (-s -w)
-make test            # Run all tests
-make test-coverage   # Coverage report (text + HTML)
-make ci              # Full CI locally (build + vet + test -race)
-make lint            # go vet
-make fmt             # gofmt
-make clean           # Remove artifacts
-```
-
 ## Architecture
 
 ```
@@ -152,10 +178,9 @@ poly/
 ├── Makefile
 ├── internal/
 │   ├── llm/                 # LLM providers + agentic loop
+│   │   ├── oai_base.go      #   Shared OpenAI-compatible base (GPT/Grok/Copilot)
 │   │   ├── anthropic.go     #   Claude
-│   │   ├── gpt.go           #   GPT
 │   │   ├── gemini.go        #   Gemini (public API + Code Assist)
-│   │   ├── grok.go          #   Grok
 │   │   ├── ollama.go        #   Ollama (local)
 │   │   ├── custom.go        #   Custom (OpenAI/Anthropic/Google format)
 │   │   ├── openai_types.go  #   Typed API structs (OAI*)
@@ -170,31 +195,31 @@ poly/
 │   │   └── components/      #   Header, messages, status, infopanel, splash
 │   ├── permission/          # Bash command classification + word-boundary matching
 │   ├── sandbox/             # Container isolation (podman/docker)
-│   ├── auth/                # OAuth PKCE + token storage
+│   ├── auth/                # OAuth PKCE + Device Flow + token storage
 │   ├── hooks/               # Pre/post tool hooks (Go templates)
 │   ├── skills/              # Skill loader (.md → system prompt)
 │   ├── session/             # Session persistence + fork + export
-│   ├── security/            # File permissions, path validation
+│   ├── security/            # Blocklist, path validation, secret sanitization
 │   ├── shell/               # Hybrid shell pipe mode
 │   └── theme/               # Catppuccin Mocha palette
 └── scripts/
 ```
 
-## Stats
+## Development
 
-| Metric | Value |
-|--------|-------|
-| Go source lines | ~28K |
-| Go files | 140 |
-| Test files | 27 |
-| Test functions | 338 |
-| Built-in tools | 21 |
-| Native providers | 5 + unlimited custom |
-| Slash commands | 30+ |
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
+```bash
+make build           # Compile binary
+make dev             # Build with race detector
+make test            # Run all tests
+make ci              # Full CI locally (build + vet + test -race)
+make fmt             # gofmt
+```
 
 ## Requirements
 
-- **Go 1.25+**
+- **Go 1.25+** (or download a pre-built binary from [Releases](https://github.com/ruipedro-pinheiro/Poly/releases))
 - API keys or OAuth credentials for desired providers
 - Optional: `podman` or `docker` for sandbox mode
 - Optional: `ollama` for local models
